@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  checking:
+    name: Check - embedded
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust for Xtensa
+        uses: esp-rs/xtensa-toolchain@v1.7.0
+        with:
+          default: true
+          ldproxy: true
+
+      - name: cargo fmt
+        run: cargo fmt --check
+
+      - name: cargo check
+        run: |
+          cargo check
+
+      - name: cargo clippy
+        run: |
+          cargo clippy -- -D warnings
