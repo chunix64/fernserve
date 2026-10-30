@@ -49,6 +49,9 @@ embedded-io-async = "0.7.0"
 esp-alloc = { version = "0.11.0", features = ["esp32"] }
 static_cell = "2.1.1"
 critical-section = "1.2.0"
+esp-println = { version = "0.18.0", features = ["esp32", "log-04"] }
+log = "0.4.34"
+embedded-hal-async = "1.0.0"
 
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
