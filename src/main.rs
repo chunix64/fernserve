@@ -19,6 +19,8 @@ mod drivers;
 mod hardwares;
 mod models;
 mod services;
+mod utils;
+mod vfs;
 
 use embassy_executor::Spawner;
 use embassy_time::Delay;
