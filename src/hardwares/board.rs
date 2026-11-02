@@ -5,7 +5,7 @@ use esp_hal::timer::timg::TimerGroup;
 use crate::models::configs::AppPeripherals;
 
 pub struct Board {
-    app_peripherals: AppPeripherals,
+    pub app_peripherals: AppPeripherals,
 }
 
 impl Board {
@@ -38,6 +38,7 @@ impl Board {
 
         let app_peripherals = AppPeripherals {
             wifi: peripherals.WIFI,
+            flash: peripherals.FLASH,
         };
 
         Self { app_peripherals }

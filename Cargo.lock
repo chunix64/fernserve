@@ -972,6 +972,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ef0e785f54e316f64a1e14a7a2f061a2ea0b038b284902ca71e1e1f5574cf47"
 dependencies = [
  "document-features",
+ "embedded-storage",
  "esp-hal",
  "esp-hal-procmacros",
  "esp-metadata-generated",
@@ -1129,11 +1130,13 @@ dependencies = [
  "esp-println",
  "esp-radio",
  "esp-rtos",
+ "esp-storage",
  "gcd",
  "littlefs2",
  "log",
  "smoltcp 0.14.0",
  "static_cell",
+ "tinyrlibc",
 ]
 
 [[package]]
@@ -2010,6 +2013,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ad99c4c6d32803332c548b1af0540b357b3f5fc0be8f6c6bfe8b2e6ae784070"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "tinyrlibc"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9af8adde15cc59c61328c5d709b41b8464522a733033584d33def687b26bd009"
+dependencies = [
+ "cc",
+ "portable-atomic",
 ]
 
 [[package]]

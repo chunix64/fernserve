@@ -1,5 +1,5 @@
 [target.xtensa-esp32-none-elf]
-runner = "espflash flash --monitor --chip esp32 --baud 921600"
+runner = "espflash flash --monitor --chip esp32 --baud 921600 --partition-table partitions.csv"
 
 [build]
 rustflags = [
@@ -13,3 +13,7 @@ build-std = ["core", "alloc"]
 
 [env]
 ESP_LOG = "DEBUG"
+CROSS_COMPILE="xtensa-esp32-elf"
+CC = "xtensa-esp32-elf-cc"
+AR = "xtensa-esp32-elf-ar"
+CFLAGS = "-mlongcalls"

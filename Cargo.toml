@@ -55,6 +55,8 @@ embedded-hal-async = "1.0.0"
 embedded-storage = "0.3.2"
 littlefs2 = "0.8.1"
 gcd = "2.3.0"
+esp-storage = { version = "0.10.0", features = ["embedded-storage", "esp32"] }
+tinyrlibc = { version = "0.5.1", features = ["strspn", "strcspn", "strlen"] }
 
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html

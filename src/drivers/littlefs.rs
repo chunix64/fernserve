@@ -20,13 +20,25 @@ type InnerFile<'a, T, const SIZE: usize> = littlefs2::fs::File<'a, 'a, LittleFsS
 type InnerFileAlloc<T, const SIZE: usize> = littlefs2::fs::FileAllocation<LittleFsStorage<T, SIZE>>;
 
 // Storage
+#[derive(Debug)]
 pub struct LittleFsStorage<T: Flash, const SIZE: usize> {
     storage: T,
+    start_offset: usize,
 }
 
 impl<T: Flash, const SIZE: usize> LittleFsStorage<T, SIZE> {
-    fn new(storage: T) -> Self {
-        Self { storage }
+    pub fn new(storage: T, start_offset: usize) -> Self {
+        Self {
+            storage,
+            start_offset,
+        }
+    }
+
+    fn abs(&self, off: usize, len: usize) -> Result<u32, littlefs2::io::Error> {
+        if off.checked_add(len).map_or(true, |end| end > SIZE) {
+            return Err(littlefs2::io::Error::IO);
+        }
+        Ok((self.start_offset + off) as u32)
     }
 }
 
@@ -41,21 +53,24 @@ impl<T: Flash, const SIZE: usize> littlefs2::driver::Storage for LittleFsStorage
     const BLOCK_CYCLES: isize = 100;
 
     fn read(&mut self, off: usize, buf: &mut [u8]) -> littlefs2::io::Result<usize> {
-        match self.storage.read(off as u32, buf) {
+        let addr = self.abs(off, buf.len())?;
+        match self.storage.read(addr, buf) {
             Ok(_) => Ok(0),
             Err(_) => Err(littlefs2::io::Error::IO),
         }
     }
 
     fn write(&mut self, off: usize, data: &[u8]) -> littlefs2::io::Result<usize> {
-        match self.storage.write(off as u32, data) {
+        let addr = self.abs(off, data.len())?;
+        match self.storage.write(addr, data) {
             Ok(_) => Ok(0),
             Err(_) => Err(littlefs2::io::Error::IO),
         }
     }
 
     fn erase(&mut self, off: usize, len: usize) -> littlefs2::io::Result<usize> {
-        match self.storage.erase(off as u32, (off + len) as u32) {
+        let addr = self.abs(off, len)?;
+        match self.storage.erase(addr, addr + len as u32) {
             Ok(_) => Ok(0),
             Err(_) => Err(littlefs2::io::Error::IO),
         }
@@ -107,15 +122,11 @@ pub struct LittleFsFileSystem<'a, T: Flash, const SIZE: usize> {
 
 impl<'a, T: Flash, const SIZE: usize> crate::models::filesystem::FileSystem
     for LittleFsFileSystem<'a, T, SIZE>
-where
-    T: littlefs2::driver::Storage,
 {
-    type Storage = T;
+    type Storage = LittleFsStorage<T, SIZE>;
     type File = Rc<RefCell<Heap<LittleFsFile<'a, T, SIZE>>>>;
 
-    fn new(storage: Self::Storage) -> Result<Self, FileSystemError> {
-        let mut storage = LittleFsStorage::new(storage);
-
+    fn new(mut storage: Self::Storage) -> Result<Self, FileSystemError> {
         if !littlefs2::fs::Filesystem::is_mountable(&mut storage) {
             match littlefs2::fs::Filesystem::format(&mut storage) {
                 Ok(()) => {}
@@ -193,7 +204,6 @@ where
                 Some(path) => path,
                 None => return Err(FileSystemError::ReadDir),
             };
-
             match fs.read_dir_and_then(path, |read_dir| {
                 let mut nodes = Vec::new();
 
@@ -227,9 +237,24 @@ where
 
         Err(FileSystemError::ReadDir)
     }
+
+    fn create_dir(&mut self, path: Path) -> Result<(), FileSystemError> {
+        if let Some(fs) = &self.fs {
+            let fs = fs.borrow_mut();
+            let path = match to_lfs_path(&path) {
+                Some(path) => path,
+                None => return Err(FileSystemError::CreateDir),
+            };
+            match fs.create_dir(path) {
+                Ok(_) => {}
+                Err(_) => return Err(FileSystemError::CreateDir),
+            }
+        }
+        Ok(())
+    }
 }
 
 // Helpers
 fn to_lfs_path(path: &Path) -> Option<&littlefs2::path::Path> {
-    littlefs2::path::Path::from_str_with_nul(path.as_str()).ok()
+    littlefs2::path::Path::from_str_with_nul(path.as_str_with_nul()).ok()
 }

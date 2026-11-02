@@ -1,0 +1,4 @@
+baudrate = 921600
+
+[idf]
+partition_table = "partitions.csv"

@@ -16,12 +16,12 @@ pub trait FileSystem: Sized {
     fn open(&mut self, path: Path) -> Result<Self::File, FileSystemError>;
     fn is_mountable(&mut self) -> Result<bool, FileSystemError>;
     fn read_dir(&mut self, path: Path) -> Result<Vec<FileSystemNode>, FileSystemError>;
+    fn create_dir(&mut self, path: Path) -> Result<(), FileSystemError>;
 }
 
 pub enum FileSystemNodeType {
     Dir,
     File,
-    Unknown,
 }
 
 pub struct FileSystemNode {

@@ -12,6 +12,7 @@ fn panic(panic_info: &core::panic::PanicInfo) -> ! {
 esp_bootloader_esp_idf::esp_app_desc!();
 
 extern crate alloc;
+extern crate tinyrlibc;
 
 // ---
 mod app;
@@ -25,13 +26,18 @@ mod vfs;
 use embassy_executor::Spawner;
 use embassy_time::Delay;
 use embedded_hal_async::delay::DelayNs;
+use littlefs2::path;
 
+use crate::models::filesystem::FileSystem;
 use crate::{app::app_task, hardwares::board::Board};
+
+const ESP_LITTLEFS_PARTITION_OFFSET: usize = 0x310000;
+const ESP_LITTLEFS_PARTITION_SIZE: usize = 0xF0000;
 
 #[allow(clippy::large_stack_frames)]
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
-    let _board = Board::init();
+    let board = Board::init();
 
     spawner.spawn(app_task(spawner).unwrap());
 

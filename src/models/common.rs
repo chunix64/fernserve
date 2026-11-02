@@ -2,6 +2,7 @@
 pub enum StorageError {}
 
 #[non_exhaustive]
+#[derive(Debug)]
 pub enum FileSystemError {
     Format,
     Mount,
@@ -9,6 +10,7 @@ pub enum FileSystemError {
     UnMountable,
     File,
     ReadDir,
+    CreateDir,
 }
 
 #[non_exhaustive]
