@@ -1,19 +1,30 @@
-use alloc::string::String;
+use alloc::vec::Vec;
 
-use crate::models::common::{FileError, FileSystemError};
+use crate::models::{common::FileSystemError, path::Path};
 
-pub trait File<'a>: Sized {
-    type FileSystem;
-    // fn new(filesystem: Self::FileSystem) -> Result<Self, FileError>;
-}
+pub trait File: Sized {}
 
 pub trait Dir {}
 
-pub trait FileSystem<'a>: Sized {
+pub trait FileSystem: Sized {
     type Storage;
     type File;
 
     fn new(storage: Self::Storage) -> Result<Self, FileSystemError>;
-    fn mount(&'a mut self) -> Result<(), FileSystemError>;
-    fn open(&'a mut self, path: String) -> Result<Self::File, FileSystemError>;
+    fn format(&mut self) -> Result<(), FileSystemError>;
+    fn mount(&mut self) -> Result<(), FileSystemError>;
+    fn open(&mut self, path: Path) -> Result<Self::File, FileSystemError>;
+    fn is_mountable(&mut self) -> Result<bool, FileSystemError>;
+    fn read_dir(&mut self, path: Path) -> Result<Vec<FileSystemNode>, FileSystemError>;
+}
+
+pub enum FileSystemNodeType {
+    Dir,
+    File,
+    Unknown,
+}
+
+pub struct FileSystemNode {
+    pub path: Path,
+    pub node_type: FileSystemNodeType,
 }

@@ -6,8 +6,12 @@ pub enum FileSystemError {
     Format,
     Mount,
     UnMounted,
+    UnMountable,
     File,
+    ReadDir,
 }
 
 #[non_exhaustive]
-pub enum FileError {}
+pub enum FileError {
+    FileSytem,
+}
