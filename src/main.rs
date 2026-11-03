@@ -26,10 +26,14 @@ mod vfs;
 use embassy_executor::Spawner;
 use embassy_time::Delay;
 use embedded_hal_async::delay::DelayNs;
-use littlefs2::path;
 
 use crate::models::filesystem::FileSystem;
+use crate::models::path::Path;
+use crate::vfs::VirtualFileSystem;
 use crate::{app::app_task, hardwares::board::Board};
+
+use crate::models::filesystem::File;
+use embedded_io::*;
 
 const ESP_LITTLEFS_PARTITION_OFFSET: usize = 0x310000;
 const ESP_LITTLEFS_PARTITION_SIZE: usize = 0xF0000;

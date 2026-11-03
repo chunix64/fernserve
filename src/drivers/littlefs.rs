@@ -1,6 +1,7 @@
 use core::cell::RefCell;
 
 use alloc::{borrow::ToOwned, rc::Rc, vec::Vec};
+use littlefs2::io::Write;
 
 use crate::{
     models::{
@@ -35,7 +36,7 @@ impl<T: Flash, const SIZE: usize> LittleFsStorage<T, SIZE> {
     }
 
     fn abs(&self, off: usize, len: usize) -> Result<u32, littlefs2::io::Error> {
-        if off.checked_add(len).map_or(true, |end| end > SIZE) {
+        if off.checked_add(len).is_none_or(|end| end > SIZE) {
             return Err(littlefs2::io::Error::IO);
         }
         Ok((self.start_offset + off) as u32)
@@ -52,6 +53,7 @@ impl<T: Flash, const SIZE: usize> littlefs2::driver::Storage for LittleFsStorage
     const BLOCK_COUNT: usize = SIZE / T::ERASE_SIZE;
     const BLOCK_CYCLES: isize = 100;
 
+    // TODO: handle errors
     fn read(&mut self, off: usize, buf: &mut [u8]) -> littlefs2::io::Result<usize> {
         let addr = self.abs(off, buf.len())?;
         match self.storage.read(addr, buf) {
@@ -78,31 +80,30 @@ impl<T: Flash, const SIZE: usize> littlefs2::driver::Storage for LittleFsStorage
 }
 
 // File
+// SAFETY: Keep the file_alloc
 pub struct LittleFsFile<'a, T: Flash, const SIZE: usize> {
     pub file: littlefs2::fs::File<'a, 'a, LittleFsStorage<T, SIZE>>,
+    pub file_alloc: Heap<littlefs2::fs::FileAllocation<LittleFsStorage<T, SIZE>>>,
 }
 
 impl<'a, T: Flash, const SIZE: usize> LittleFsFile<'a, T, SIZE> {
     pub fn new(
         path: Path,
         filesystem: &'a mut littlefs2::fs::Filesystem<'a, LittleFsStorage<T, SIZE>>,
-        file_alloc: &'a mut littlefs2::fs::FileAllocation<LittleFsStorage<T, SIZE>>,
     ) -> Result<Self, FileError> {
-        let path = match to_lfs_path(&path) {
-            Some(path) => path,
-            None => return Err(FileError::FileSytem),
-        };
-
         // SAFETY: FatFS library has already exposed the unsafe open_file() as safe anyway
         // Just manually close the file to prevent undefined behaviors
+        let path = to_lfs_path(&path).ok_or(FileError::FileSystem)?;
+        let file_alloc = Heap::new(littlefs2::fs::File::allocate());
+        let file_alloc_0 = unsafe { &mut *(&mut *file_alloc.as_ptr() as *mut _) };
 
         unsafe {
-            let file = match littlefs2::fs::File::open(filesystem, file_alloc, path) {
+            let file = match littlefs2::fs::File::open(filesystem, &mut *file_alloc_0, path) {
                 Ok(file) => file,
-                Err(_) => return Err(FileError::FileSytem),
+                Err(_) => return Err(FileError::FileSystem),
             };
 
-            Ok(Self { file })
+            Ok(Self { file, file_alloc })
         }
     }
 }
@@ -110,11 +111,43 @@ impl<'a, T: Flash, const SIZE: usize> LittleFsFile<'a, T, SIZE> {
 impl<'a, T: Flash, const SIZE: usize> crate::models::filesystem::File
     for LittleFsFile<'a, T, SIZE>
 {
+    fn close(self) -> Result<(), FileError> {
+        unsafe { self.file.close().map_err(|_| FileError::Close) }
+    }
 }
 
+impl<'a, T: Flash, const SIZE: usize> embedded_io::ErrorType for LittleFsFile<'a, T, SIZE> {
+    type Error = FileError;
+}
+
+impl<'a, T: Flash, const SIZE: usize> embedded_io::Read for LittleFsFile<'a, T, SIZE> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        self.file.read(buf).map_err(|_| FileError::FileSystem)
+    }
+}
+
+impl<'a, T: Flash, const SIZE: usize> embedded_io::Write for LittleFsFile<'a, T, SIZE> {
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        self.file.flush().map_err(|_| FileError::Flush)
+    }
+
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        self.file.write(buf).map_err(|_| FileError::Write)
+    }
+}
+
+impl<'a, T: Flash, const SIZE: usize> embedded_io::Seek for LittleFsFile<'a, T, SIZE> {
+    fn seek(&mut self, pos: embedded_io::SeekFrom) -> Result<u64, Self::Error> {
+        let pos = to_lfs_seek(pos).ok_or(FileError::Seek)?;
+
+        self.file
+            .seek(pos)
+            .map(|value| value as u64)
+            .map_err(|_| FileError::Seek)
+    }
+}
 // Filesystem
 pub struct LittleFsFileSystem<'a, T: Flash, const SIZE: usize> {
-    files: Vec<Rc<RefCell<Heap<LittleFsFile<'a, T, SIZE>>>>>,
     fs: Option<Rc<RefCell<littlefs2::fs::Filesystem<'a, LittleFsStorage<T, SIZE>>>>>,
     alloc: littlefs2::fs::Allocation<LittleFsStorage<T, SIZE>>,
     storage: LittleFsStorage<T, SIZE>,
@@ -124,31 +157,20 @@ impl<'a, T: Flash, const SIZE: usize> crate::models::filesystem::FileSystem
     for LittleFsFileSystem<'a, T, SIZE>
 {
     type Storage = LittleFsStorage<T, SIZE>;
-    type File = Rc<RefCell<Heap<LittleFsFile<'a, T, SIZE>>>>;
+    type File = LittleFsFile<'a, T, SIZE>;
 
-    fn new(mut storage: Self::Storage) -> Result<Self, FileSystemError> {
-        if !littlefs2::fs::Filesystem::is_mountable(&mut storage) {
-            match littlefs2::fs::Filesystem::format(&mut storage) {
-                Ok(()) => {}
-                Err(_) => return Err(FileSystemError::Format),
-            }
-        }
-
+    fn new(storage: Self::Storage) -> Result<Self, FileSystemError> {
         let alloc = littlefs2::fs::Filesystem::allocate();
 
         Ok(Self {
             storage,
             alloc,
             fs: None,
-            files: Vec::new(),
         })
     }
 
     fn format(&mut self) -> Result<(), FileSystemError> {
-        match littlefs2::fs::Filesystem::format(&mut self.storage) {
-            Ok(()) => Ok(()),
-            Err(_) => Err(FileSystemError::Format),
-        }
+        littlefs2::fs::Filesystem::format(&mut self.storage).map_err(|_| FileSystemError::Format)
     }
 
     fn mount(&mut self) -> Result<(), FileSystemError> {
@@ -162,9 +184,8 @@ impl<'a, T: Flash, const SIZE: usize> crate::models::filesystem::FileSystem
             )
         };
 
-        let Ok(fs) = littlefs2::fs::Filesystem::mount(alloc, storage) else {
-            return Err(FileSystemError::Mount);
-        };
+        let fs =
+            littlefs2::fs::Filesystem::mount(alloc, storage).map_err(|_| FileSystemError::Mount)?;
 
         self.fs = Some(Rc::new(RefCell::new(fs)));
 
@@ -172,39 +193,27 @@ impl<'a, T: Flash, const SIZE: usize> crate::models::filesystem::FileSystem
     }
 
     fn is_mountable(&mut self) -> Result<bool, FileSystemError> {
-        match littlefs2::fs::Filesystem::is_mountable(&mut self.storage) {
-            true => Ok(true),
-            false => Err(FileSystemError::UnMountable),
-        }
+        Ok(littlefs2::fs::Filesystem::is_mountable(&mut self.storage))
     }
 
     fn open(&mut self, path: Path) -> Result<Self::File, FileSystemError> {
-        let Some(fs) = &self.fs else {
-            return Err(FileSystemError::UnMounted);
-        };
+        let fs = self.fs.as_ref().ok_or(FileSystemError::UnMounted)?;
 
         unsafe {
             let fs_ref: &'a mut littlefs2::fs::Filesystem<'a, LittleFsStorage<T, SIZE>> =
                 &mut *fs.as_ptr();
-            let file_alloc = Heap::new(littlefs2::fs::File::allocate());
-            let Ok(file) = LittleFsFile::new(path, fs_ref, &mut *file_alloc.as_ptr()) else {
-                return Err(FileSystemError::File);
-            };
+            let file = LittleFsFile::new(path, fs_ref).map_err(|_| FileSystemError::File)?;
 
-            let file_rc = Rc::new(RefCell::new(Heap::new(file)));
-            self.files.push(Rc::clone(&file_rc));
-            Ok(Rc::clone(&file_rc))
+            Ok(file)
         }
     }
 
     fn read_dir(&mut self, path: Path) -> Result<Vec<FileSystemNode>, FileSystemError> {
-        if let Some(fs) = &self.fs {
-            let fs = fs.borrow_mut();
-            let path = match to_lfs_path(&path) {
-                Some(path) => path,
-                None => return Err(FileSystemError::ReadDir),
-            };
-            match fs.read_dir_and_then(path, |read_dir| {
+        let fs = self.fs.as_ref().ok_or(FileSystemError::ReadDir)?;
+        let path = to_lfs_path(&path).ok_or(FileSystemError::ReadDir)?;
+
+        fs.borrow_mut()
+            .read_dir_and_then(path, |read_dir| {
                 let mut nodes = Vec::new();
 
                 for entry in read_dir {
@@ -229,32 +238,61 @@ impl<'a, T: Flash, const SIZE: usize> crate::models::filesystem::FileSystem
                 }
 
                 Ok(nodes)
-            }) {
-                Ok(nodes) => return Ok(nodes),
-                Err(_) => return Err(FileSystemError::ReadDir),
-            }
-        }
-
-        Err(FileSystemError::ReadDir)
+            })
+            .map_err(|_| FileSystemError::ReadDir)
     }
 
     fn create_dir(&mut self, path: Path) -> Result<(), FileSystemError> {
-        if let Some(fs) = &self.fs {
-            let fs = fs.borrow_mut();
-            let path = match to_lfs_path(&path) {
-                Some(path) => path,
-                None => return Err(FileSystemError::CreateDir),
-            };
-            match fs.create_dir(path) {
-                Ok(_) => {}
-                Err(_) => return Err(FileSystemError::CreateDir),
-            }
-        }
-        Ok(())
+        let fs = self.fs.as_ref().ok_or(FileSystemError::CreateDir)?;
+        let path = to_lfs_path(&path).ok_or(FileSystemError::CreateDir)?;
+
+        fs.borrow_mut()
+            .create_dir(path)
+            .map_err(|_| FileSystemError::CreateDir)
+    }
+
+    fn create_file(&mut self, path: Path) -> Result<(), FileSystemError> {
+        let fs = self.fs.as_ref().ok_or(FileSystemError::CreateDir)?;
+        let path = to_lfs_path(&path).ok_or(FileSystemError::CreateDir)?;
+
+        fs.borrow_mut()
+            .create_file_and_then(path, |_| Ok(()))
+            .map_err(|_| FileSystemError::CreateFile)
+    }
+
+    fn remove(&mut self, path: Path) -> Result<(), FileSystemError> {
+        let fs = self.fs.as_ref().ok_or(FileSystemError::Remove)?;
+        let path = to_lfs_path(&path).ok_or(FileSystemError::Remove)?;
+
+        fs.borrow_mut()
+            .remove_dir(path)
+            .map_err(|_| FileSystemError::Remove)
+    }
+
+    fn rename(&mut self, src_path: Path, dest_path: Path) -> Result<(), FileSystemError> {
+        let fs = self.fs.as_ref().ok_or(FileSystemError::Remove)?;
+        let src_path = to_lfs_path(&src_path).ok_or(FileSystemError::Remove)?;
+        let dest_path = to_lfs_path(&dest_path).ok_or(FileSystemError::Remove)?;
+
+        fs.borrow_mut()
+            .rename(src_path, dest_path)
+            .map_err(|_| FileSystemError::Rename)
     }
 }
 
 // Helpers
 fn to_lfs_path(path: &Path) -> Option<&littlefs2::path::Path> {
     littlefs2::path::Path::from_str_with_nul(path.as_str_with_nul()).ok()
+}
+
+fn to_lfs_seek(pos: embedded_io::SeekFrom) -> Option<littlefs2::io::SeekFrom> {
+    match pos {
+        embedded_io::SeekFrom::Start(n) => {
+            u32::try_from(n).map(littlefs2::io::SeekFrom::Start).ok()
+        }
+        embedded_io::SeekFrom::End(n) => i32::try_from(n).map(littlefs2::io::SeekFrom::End).ok(),
+        embedded_io::SeekFrom::Current(n) => {
+            i32::try_from(n).map(littlefs2::io::SeekFrom::Current).ok()
+        }
+    }
 }

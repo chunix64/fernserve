@@ -1,10 +1,15 @@
 use alloc::vec::Vec;
 
-use crate::models::{common::FileSystemError, path::Path};
+use crate::models::{
+    common::{FileError, FileSystemError},
+    path::Path,
+};
 
-pub trait File: Sized {}
-
-pub trait Dir {}
+pub trait File:
+    Sized + embedded_io::ErrorType + embedded_io::Read + embedded_io::Write + embedded_io::Seek
+{
+    fn close(self) -> Result<(), FileError>;
+}
 
 pub trait FileSystem: Sized {
     type Storage;
@@ -17,13 +22,18 @@ pub trait FileSystem: Sized {
     fn is_mountable(&mut self) -> Result<bool, FileSystemError>;
     fn read_dir(&mut self, path: Path) -> Result<Vec<FileSystemNode>, FileSystemError>;
     fn create_dir(&mut self, path: Path) -> Result<(), FileSystemError>;
+    fn create_file(&mut self, path: Path) -> Result<(), FileSystemError>;
+    fn remove(&mut self, path: Path) -> Result<(), FileSystemError>;
+    fn rename(&mut self, src_path: Path, dest_path: Path) -> Result<(), FileSystemError>;
 }
 
+#[derive(Debug)]
 pub enum FileSystemNodeType {
     Dir,
     File,
 }
 
+#[derive(Debug)]
 pub struct FileSystemNode {
     pub path: Path,
     pub node_type: FileSystemNodeType,
