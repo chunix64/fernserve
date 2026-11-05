@@ -54,9 +54,9 @@ heapless = { version = "0.9.3", features = ["alloc"] }
 tinyrlibc = { version = "0.5.1", features = ["strspn", "strcspn", "strlen"] }
 littlefs2 = { version = "0.8.1", features = ["alloc"] }
 serde = { version = "1.0.229", features = ["alloc", "derive"], default-features = false }
+serde_json = { version = "1.0.154", features = ["alloc"], default-features = false }
 nanofish = { version = "0.14.1", features = ["embassy", "smoltcp"] }
 log = "0.4.34"
-serde_json = { version = "1.0.154", features = ["alloc"], default-features = false }
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
 [profile.dev]

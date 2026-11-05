@@ -42,6 +42,10 @@ jobs:
         run: |
           cargo check
 
+      - name: cargo build
+        run: |
+          cargo build
+
       - name: cargo clippy
         run: |
           cargo clippy -- -D warnings

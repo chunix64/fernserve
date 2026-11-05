@@ -49,9 +49,9 @@ impl WebServerHandler {
             "/" => self.homepage(),
             "/api/v1/status" => Self::status(),
             "/api/v1/vfs/read_dir" => self.vfs_read_dir(request),
-            "/api/vfs/create_dir" => self.vfs_create_dir(request),
-            "/api/vfs/remove" => self.vfs_remove(request),
-            "/api/vfs/rename" => self.vfs_rename(request),
+            "/api/v1/vfs/create_dir" => self.vfs_create_dir(request),
+            "/api/v1/vfs/remove" => self.vfs_remove(request),
+            "/api/v1/vfs/rename" => self.vfs_rename(request),
             _ => Self::not_found(),
         }
     }
@@ -61,11 +61,11 @@ impl WebServerHandler {
         request: &HttpRequest,
     ) -> Result<nanofish::HttpResponse<'_>, nanofish::Error> {
         match request.path {
-            "/api/status" => Self::status(),
-            "/api/vfs/read_dir" => self.vfs_read_dir(request),
-            "/api/vfs/create_dir" => self.vfs_create_dir(request),
-            "/api/vfs/remove" => self.vfs_remove(request),
-            "/api/vfs/rename" => self.vfs_rename(request),
+            "/api/v1/status" => Self::status(),
+            "/api/v1/vfs/read_dir" => self.vfs_read_dir(request),
+            "/api/v1/vfs/create_dir" => self.vfs_create_dir(request),
+            "/api/v1/vfs/remove" => self.vfs_remove(request),
+            "/api/v1/vfs/rename" => self.vfs_rename(request),
             _ => Self::not_found(),
         }
     }
