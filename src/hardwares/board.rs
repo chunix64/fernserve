@@ -13,7 +13,10 @@ impl Board {
         let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
         let peripherals = esp_hal::init(config);
 
-        esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 98768);
+        // Allocate ~160KB for heap
+        esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 98768); // Max size of the reclaimed memory from the bootloader
+        esp_alloc::heap_allocator!(size: 64 * 1024); // 64 KB decrease if crashed because of running out of stack memory
+
         esp_println::logger::init_logger_from_env();
         Self::start_freertos(peripherals.TIMG0, peripherals.FROM_CPU_INTR0);
 

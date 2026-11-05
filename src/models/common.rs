@@ -45,6 +45,12 @@ pub enum FileError {
     Seek,
 }
 
+#[non_exhaustive]
+#[derive(Debug)]
+pub enum PathError {
+    Overflow,
+}
+
 impl fmt::Display for FileError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

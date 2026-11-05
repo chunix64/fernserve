@@ -11,19 +11,12 @@ path = "./src/main.rs"
 [dependencies]
 esp-hal = { version = "~1.2.2", features = ["esp32", "unstable"] }
 esp-bootloader-esp-idf = { version = "0.6.0", features = ["esp32"] }
+esp-alloc = { version = "0.11.0", features = ["esp32"] }
 esp-rtos = { version = "0.4.0", features = [
     "embassy",
     "esp-alloc",
     "esp-radio",
     "esp32",
-] }
-embassy-executor = { version = "0.10.0", features = [] }
-embassy-time = "0.5.0"
-embassy-net = { version = "0.9.1", features = [
-    "dhcpv4",
-    "medium-ethernet",
-    "tcp",
-    "udp",
 ] }
 esp-radio = { version = "1.0.0-beta.1", features = [
     "esp-alloc",
@@ -31,6 +24,12 @@ esp-radio = { version = "1.0.0-beta.1", features = [
     "unstable",
     "wifi",
 ] }
+esp-storage = { version = "0.10.0", features = ["embedded-storage", "esp32"] }
+esp-println = { version = "0.18.0", features = ["esp32", "log-04"] }
+
+embassy-executor = { version = "0.10.0", features = [] }
+embassy-time = "0.5.0"
+embassy-net = { version = "0.9.1", features = ["dhcpv4", "dns", "medium-ethernet", "tcp", "udp"] }
 smoltcp = { version = "0.14.0", default-features = false, features = [
     "medium-ethernet",
     "multicast",
@@ -43,21 +42,21 @@ smoltcp = { version = "0.14.0", default-features = false, features = [
     "socket-tcp",
     "socket-udp",
 ] }
+
 embedded-io = { version = "0.7.1", features = ["alloc"] }
 embedded-io-async = "0.7.0"
+embedded-storage = "0.3.2"
+embedded-hal-async = "1.0.0"
 
-esp-alloc = { version = "0.11.0", features = ["esp32"] }
 static_cell = "2.1.1"
 critical-section = "1.2.0"
-esp-println = { version = "0.18.0", features = ["esp32", "log-04"] }
-log = "0.4.34"
-embedded-hal-async = "1.0.0"
-embedded-storage = "0.3.2"
-littlefs2 = { version = "0.8.1", features = ["alloc"] }
-gcd = "2.3.0"
-esp-storage = { version = "0.10.0", features = ["embedded-storage", "esp32"] }
+heapless = { version = "0.9.3", features = ["alloc"] }
 tinyrlibc = { version = "0.5.1", features = ["strspn", "strcspn", "strlen"] }
-
+littlefs2 = { version = "0.8.1", features = ["alloc"] }
+serde = { version = "1.0.229", features = ["alloc", "derive"], default-features = false }
+nanofish = { version = "0.14.1", features = ["embassy", "smoltcp"] }
+log = "0.4.34"
+serde_json = { version = "1.0.154", features = ["alloc"], default-features = false }
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
 [profile.dev]

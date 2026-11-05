@@ -1,25 +1,31 @@
 use alloc::vec::Vec;
 
-use crate::models::{
-    common::VirtualFileSystemError,
-    filesystem::{FileSystem, FileSystemNode},
-    path::Path,
+use crate::{
+    drivers::anyfs::AnyFs,
+    models::{
+        common::VirtualFileSystemError,
+        filesystem::{FileSystem, FileSystemNode},
+        path::Path,
+    },
 };
 
-pub struct VirtualFileSystem<T: FileSystem> {
-    root_filesystem: T,
-    mount_points: Vec<(&'static str, T)>,
+pub struct VirtualFileSystem {
+    root_filesystem: AnyFs,
+    mount_points: Vec<(&'static str, AnyFs)>,
 }
 
-impl<T: FileSystem> VirtualFileSystem<T> {
-    pub fn new(root_filesystem: T) -> Result<Self, VirtualFileSystemError> {
+impl VirtualFileSystem {
+    pub fn new(root_filesystem: AnyFs) -> Result<Self, VirtualFileSystemError> {
         Ok(Self {
             root_filesystem,
             mount_points: Vec::new(),
         })
     }
 
-    pub fn open(&mut self, path: Path) -> Result<T::File, VirtualFileSystemError> {
+    pub fn open(
+        &mut self,
+        path: Path,
+    ) -> Result<<AnyFs as FileSystem>::File, VirtualFileSystemError> {
         match self.get_filesystem(path) {
             Ok((fs, fs_path, _)) => fs.open(fs_path).map_err(|_| VirtualFileSystemError::Open),
             Err(error) => Err(error),
@@ -88,7 +94,7 @@ impl<T: FileSystem> VirtualFileSystem<T> {
     fn get_filesystem(
         &mut self,
         path: Path,
-    ) -> Result<(&mut T, Path, Option<usize>), VirtualFileSystemError> {
+    ) -> Result<(&mut AnyFs, Path, Option<usize>), VirtualFileSystemError> {
         if path.as_str() == "/dev" {
             return Err(VirtualFileSystemError::Dev);
         }
@@ -108,11 +114,11 @@ impl<T: FileSystem> VirtualFileSystem<T> {
                 .find(|(_, (key, _))| *key == components[1])
         {
             components.remove(0);
-            return Ok((
-                target_filesystem,
-                Path::from_components(components),
-                Some(mount_index),
-            ));
+
+            let path = Path::from_components(components)
+                .map_err(|_| VirtualFileSystemError::InvalidPath)?;
+
+            return Ok((target_filesystem, path, Some(mount_index)));
         }
 
         Ok((&mut self.root_filesystem, path, None))

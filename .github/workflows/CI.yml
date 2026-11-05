@@ -26,7 +26,19 @@ jobs:
       - name: cargo fmt
         run: cargo fmt --check
 
+      - name: Setup xtensa-toolchain
+        run: |
+          INCS=$(echo | xtensa-esp32-elf-gcc -E -Wp,-v -xc - 2>&1 >/dev/null \
+            | sed -n 's|^ \(/.*\)$|-isystem \1|p' | tr '\n' ' ')
+          echo "Using: $INCS"
+          echo "BINDGEN_EXTRA_CLANG_ARGS_xtensa_esp32_none_elf=$INCS" >> "$GITHUB_ENV"
+
+      - name: Setup xtensa-toolchain (fallback)
+        run: sudo apt-get update && sudo apt-get install -y libc6-dev-i386
+
       - name: cargo check
+        env:
+          BINDGEN_EXTRA_CLANG_ARGS_xtensa_esp32_none_elf: "-I/usr/include/x86_64-linux-gnu"
         run: |
           cargo check
 

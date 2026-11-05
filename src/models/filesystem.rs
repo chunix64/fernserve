@@ -1,4 +1,5 @@
 use alloc::vec::Vec;
+use serde::Serialize;
 
 use crate::models::{
     common::{FileError, FileSystemError},
@@ -12,10 +13,8 @@ pub trait File:
 }
 
 pub trait FileSystem: Sized {
-    type Storage;
     type File;
 
-    fn new(storage: Self::Storage) -> Result<Self, FileSystemError>;
     fn format(&mut self) -> Result<(), FileSystemError>;
     fn mount(&mut self) -> Result<(), FileSystemError>;
     fn open(&mut self, path: Path) -> Result<Self::File, FileSystemError>;
@@ -27,13 +26,13 @@ pub trait FileSystem: Sized {
     fn rename(&mut self, src_path: Path, dest_path: Path) -> Result<(), FileSystemError>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum FileSystemNodeType {
     Dir,
     File,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct FileSystemNode {
     pub path: Path,
     pub node_type: FileSystemNodeType,

@@ -17,9 +17,6 @@ use embedded_storage::nor_flash::NorFlash;
 pub trait Flash: NorFlash {}
 impl<T: NorFlash> Flash for T {}
 
-type InnerFile<'a, T, const SIZE: usize> = littlefs2::fs::File<'a, 'a, LittleFsStorage<T, SIZE>>;
-type InnerFileAlloc<T, const SIZE: usize> = littlefs2::fs::FileAllocation<LittleFsStorage<T, SIZE>>;
-
 // Storage
 #[derive(Debug)]
 pub struct LittleFsStorage<T: Flash, const SIZE: usize> {
@@ -81,15 +78,15 @@ impl<T: Flash, const SIZE: usize> littlefs2::driver::Storage for LittleFsStorage
 
 // File
 // SAFETY: Keep the file_alloc
-pub struct LittleFsFile<'a, T: Flash, const SIZE: usize> {
-    pub file: littlefs2::fs::File<'a, 'a, LittleFsStorage<T, SIZE>>,
-    pub file_alloc: Heap<littlefs2::fs::FileAllocation<LittleFsStorage<T, SIZE>>>,
+pub struct LittleFsFile<'a, S: littlefs2::driver::Storage> {
+    pub file: littlefs2::fs::File<'a, 'a, S>,
+    pub file_alloc: Heap<littlefs2::fs::FileAllocation<S>>,
 }
 
-impl<'a, T: Flash, const SIZE: usize> LittleFsFile<'a, T, SIZE> {
+impl<'a, S: littlefs2::driver::Storage> LittleFsFile<'a, S> {
     pub fn new(
         path: Path,
-        filesystem: &'a mut littlefs2::fs::Filesystem<'a, LittleFsStorage<T, SIZE>>,
+        filesystem: &'a mut littlefs2::fs::Filesystem<'a, S>,
     ) -> Result<Self, FileError> {
         // SAFETY: FatFS library has already exposed the unsafe open_file() as safe anyway
         // Just manually close the file to prevent undefined behaviors
@@ -108,25 +105,23 @@ impl<'a, T: Flash, const SIZE: usize> LittleFsFile<'a, T, SIZE> {
     }
 }
 
-impl<'a, T: Flash, const SIZE: usize> crate::models::filesystem::File
-    for LittleFsFile<'a, T, SIZE>
-{
+impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::File for LittleFsFile<'a, S> {
     fn close(self) -> Result<(), FileError> {
         unsafe { self.file.close().map_err(|_| FileError::Close) }
     }
 }
 
-impl<'a, T: Flash, const SIZE: usize> embedded_io::ErrorType for LittleFsFile<'a, T, SIZE> {
+impl<'a, S: littlefs2::driver::Storage> embedded_io::ErrorType for LittleFsFile<'a, S> {
     type Error = FileError;
 }
 
-impl<'a, T: Flash, const SIZE: usize> embedded_io::Read for LittleFsFile<'a, T, SIZE> {
+impl<'a, S: littlefs2::driver::Storage> embedded_io::Read for LittleFsFile<'a, S> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         self.file.read(buf).map_err(|_| FileError::FileSystem)
     }
 }
 
-impl<'a, T: Flash, const SIZE: usize> embedded_io::Write for LittleFsFile<'a, T, SIZE> {
+impl<'a, S: littlefs2::driver::Storage> embedded_io::Write for LittleFsFile<'a, S> {
     fn flush(&mut self) -> Result<(), Self::Error> {
         self.file.flush().map_err(|_| FileError::Flush)
     }
@@ -136,7 +131,7 @@ impl<'a, T: Flash, const SIZE: usize> embedded_io::Write for LittleFsFile<'a, T,
     }
 }
 
-impl<'a, T: Flash, const SIZE: usize> embedded_io::Seek for LittleFsFile<'a, T, SIZE> {
+impl<'a, S: littlefs2::driver::Storage> embedded_io::Seek for LittleFsFile<'a, S> {
     fn seek(&mut self, pos: embedded_io::SeekFrom) -> Result<u64, Self::Error> {
         let pos = to_lfs_seek(pos).ok_or(FileError::Seek)?;
 
@@ -147,19 +142,14 @@ impl<'a, T: Flash, const SIZE: usize> embedded_io::Seek for LittleFsFile<'a, T, 
     }
 }
 // Filesystem
-pub struct LittleFsFileSystem<'a, T: Flash, const SIZE: usize> {
-    fs: Option<Rc<RefCell<littlefs2::fs::Filesystem<'a, LittleFsStorage<T, SIZE>>>>>,
-    alloc: littlefs2::fs::Allocation<LittleFsStorage<T, SIZE>>,
-    storage: LittleFsStorage<T, SIZE>,
+pub struct LittleFsFileSystem<'a, S: littlefs2::driver::Storage> {
+    fs: Option<Rc<RefCell<littlefs2::fs::Filesystem<'a, S>>>>,
+    alloc: littlefs2::fs::Allocation<S>,
+    storage: S,
 }
 
-impl<'a, T: Flash, const SIZE: usize> crate::models::filesystem::FileSystem
-    for LittleFsFileSystem<'a, T, SIZE>
-{
-    type Storage = LittleFsStorage<T, SIZE>;
-    type File = LittleFsFile<'a, T, SIZE>;
-
-    fn new(storage: Self::Storage) -> Result<Self, FileSystemError> {
+impl<'a, S: littlefs2::driver::Storage> LittleFsFileSystem<'a, S> {
+    pub fn new(storage: S) -> Result<Self, FileSystemError> {
         let alloc = littlefs2::fs::Filesystem::allocate();
 
         Ok(Self {
@@ -168,6 +158,12 @@ impl<'a, T: Flash, const SIZE: usize> crate::models::filesystem::FileSystem
             fs: None,
         })
     }
+}
+
+impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
+    for LittleFsFileSystem<'a, S>
+{
+    type File = LittleFsFile<'a, S>;
 
     fn format(&mut self) -> Result<(), FileSystemError> {
         littlefs2::fs::Filesystem::format(&mut self.storage).map_err(|_| FileSystemError::Format)
@@ -200,8 +196,7 @@ impl<'a, T: Flash, const SIZE: usize> crate::models::filesystem::FileSystem
         let fs = self.fs.as_ref().ok_or(FileSystemError::UnMounted)?;
 
         unsafe {
-            let fs_ref: &'a mut littlefs2::fs::Filesystem<'a, LittleFsStorage<T, SIZE>> =
-                &mut *fs.as_ptr();
+            let fs_ref: &'a mut littlefs2::fs::Filesystem<'a, S> = &mut *fs.as_ptr();
             let file = LittleFsFile::new(path, fs_ref).map_err(|_| FileSystemError::File)?;
 
             Ok(file)
@@ -230,11 +225,9 @@ impl<'a, T: Flash, const SIZE: usize> crate::models::filesystem::FileSystem
                     };
 
                     let path = entry.path().as_str().to_owned();
+                    let path = Path::new(&path).map_err(|_| littlefs2::io::Error::IO)?;
 
-                    nodes.push(FileSystemNode {
-                        path: Path::new(&path),
-                        node_type,
-                    });
+                    nodes.push(FileSystemNode { path, node_type });
                 }
 
                 Ok(nodes)
