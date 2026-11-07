@@ -14,10 +14,7 @@ impl WebServerParser {
         match vfs.read_dir(path) {
             Ok(entries) => match serde_json::to_string(&entries) {
                 Ok(data) => Ok(data),
-                Err(error) => {
-                    log::debug!("[DEBUG] parser: {:?}", error);
-                    Err(WebServerError::Parser)
-                }
+                Err(_) => Err(WebServerError::Parser),
             },
 
             Err(_) => Err(WebServerError::Parser),
@@ -26,20 +23,12 @@ impl WebServerParser {
 
     pub fn vfs_create_dir(vfs: &mut VirtualFileSystem, path: &str) -> Result<(), WebServerError> {
         let path = Path::new(path).map_err(|_| WebServerError::Path)?;
-
-        match vfs.create_dir(path) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(WebServerError::Parser),
-        }
+        vfs.create_dir(path).map_err(|_| WebServerError::Parser)
     }
 
     pub fn vfs_remove(vfs: &mut VirtualFileSystem, path: &str) -> Result<(), WebServerError> {
         let path = Path::new(path).map_err(|_| WebServerError::Path)?;
-
-        match vfs.remove(path) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(WebServerError::Parser),
-        }
+        vfs.remove(path).map_err(|_| WebServerError::Parser)
     }
 
     pub fn vfs_rename(
@@ -50,10 +39,8 @@ impl WebServerParser {
         let src_path = Path::new(src_path).map_err(|_| WebServerError::Path)?;
         let dest_path = Path::new(dest_path).map_err(|_| WebServerError::Path)?;
 
-        match vfs.rename(src_path, dest_path) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(WebServerError::Parser),
-        }
+        vfs.rename(src_path, dest_path)
+            .map_err(|_| WebServerError::Parser)
     }
 
     // helpers

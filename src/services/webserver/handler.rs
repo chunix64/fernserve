@@ -1,17 +1,46 @@
 use alloc::borrow::Cow;
-use heapless::{String, Vec};
-use nanofish::{HttpHandler, HttpMethod, HttpRequest, HttpResponse, ResponseBody, StatusCode};
+use heapless::String;
+use nanofish::{
+    BodyLength, HttpHeader, HttpMethod, HttpRequest, ResponseWriter, StatusCode, StreamingHandler,
+    mime_types,
+};
 
 use crate::{
     services::webserver::{WebServerError, parser::WebServerParser},
     vfs::VirtualFileSystem,
 };
 
+// Defines
 pub struct WebServerHandler {
     vfs: VirtualFileSystem,
     buffer: String<2048>,
 }
 
+const CHUNK_SIZE: usize = 1024;
+
+// Helper macros
+macro_rules! helper_static_file {
+    ($response:ident, $path:literal, $mime:expr) => {{
+        static BODY: &[u8] =
+            include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/webui/dist/", $path));
+
+        $response
+            .send_head(
+                StatusCode::Ok,
+                &[HttpHeader::content_type($mime)],
+                BodyLength::Known(BODY.len()),
+            )
+            .await?;
+
+        for chunk in BODY.chunks(CHUNK_SIZE) {
+            $response.write(chunk).await?;
+        }
+
+        Ok(())
+    }};
+}
+
+// Impl
 impl WebServerHandler {
     pub fn new(vfs: VirtualFileSystem) -> Self {
         Self {
@@ -21,118 +50,138 @@ impl WebServerHandler {
     }
 }
 
-impl HttpHandler for WebServerHandler {
-    async fn handle_request(
+impl StreamingHandler for WebServerHandler {
+    async fn handle<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
         &mut self,
-        request: &nanofish::HttpRequest<'_>,
-    ) -> Result<nanofish::HttpResponse<'_>, nanofish::Error> {
+        request: &HttpRequest<'_>,
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
+    ) -> Result<(), nanofish::Error> {
         log::debug!("[DEBUG] http: {:?}", request);
         match request.method {
-            HttpMethod::GET => self.get_handler(request),
-            HttpMethod::POST => self.post_handler(request),
-            _ => Ok(HttpResponse {
-                status_code: StatusCode::MethodNotAllowed,
-                headers: Vec::new(),
-                body: ResponseBody::Empty,
-            }),
+            HttpMethod::GET => self.get_handler(request, response).await,
+            HttpMethod::POST => self.post_handler(request, response).await,
+            _ => self.other_handler(response).await,
         }
     }
 }
 
 impl WebServerHandler {
     // Methods
-    fn get_handler(
+    async fn get_handler<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
         &mut self,
-        request: &HttpRequest,
-    ) -> Result<nanofish::HttpResponse<'_>, nanofish::Error> {
+        request: &HttpRequest<'_>,
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
+    ) -> Result<(), nanofish::Error> {
         match request.route_path() {
-            "/" => self.homepage(),
-            "/api/v1/status" => Self::status(),
-            "/api/v1/vfs/read_dir" => self.vfs_read_dir(request),
-            "/api/v1/vfs/create_dir" => self.vfs_create_dir(request),
-            "/api/v1/vfs/remove" => self.vfs_remove(request),
-            "/api/v1/vfs/rename" => self.vfs_rename(request),
-            _ => Self::not_found(),
+            // static files
+            // TODO: include_dir! macro
+            "/" => helper_static_file!(response, "index.html", mime_types::HTML),
+
+            // APIs
+            "/api/v1/status" => Self::status(response).await,
+            "/api/v1/vfs/read_dir" => self.vfs_read_dir(request, response).await,
+            "/api/v1/vfs/create_dir" => self.vfs_create_dir(request, response).await,
+            "/api/v1/vfs/remove" => self.vfs_remove(request, response).await,
+            "/api/v1/vfs/rename" => self.vfs_rename(request, response).await,
+
+            // Not founds
+            _ => Self::not_found(response).await,
         }
     }
 
-    fn post_handler(
+    async fn post_handler<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
         &mut self,
-        request: &HttpRequest,
-    ) -> Result<nanofish::HttpResponse<'_>, nanofish::Error> {
+        request: &HttpRequest<'_>,
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
+    ) -> Result<(), nanofish::Error> {
         match request.path {
-            "/api/v1/status" => Self::status(),
-            "/api/v1/vfs/read_dir" => self.vfs_read_dir(request),
-            "/api/v1/vfs/create_dir" => self.vfs_create_dir(request),
-            "/api/v1/vfs/remove" => self.vfs_remove(request),
-            "/api/v1/vfs/rename" => self.vfs_rename(request),
-            _ => Self::not_found(),
+            "/api/v1/status" => Self::status(response).await,
+            "/api/v1/vfs/read_dir" => self.vfs_read_dir(request, response).await,
+            "/api/v1/vfs/create_dir" => self.vfs_create_dir(request, response).await,
+            "/api/v1/vfs/remove" => self.vfs_remove(request, response).await,
+            "/api/v1/vfs/rename" => self.vfs_rename(request, response).await,
+            _ => Self::not_found(response).await,
         }
+    }
+
+    async fn other_handler<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
+        &mut self,
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
+    ) -> Result<(), nanofish::Error> {
+        response
+            .send_head(
+                StatusCode::MethodNotAllowed,
+                &[HttpHeader::content_type(mime_types::TEXT)],
+                BodyLength::Known(0),
+            )
+            .await?;
+
+        Ok(())
     }
 
     // Path specifics
-    fn homepage(&mut self) -> Result<nanofish::HttpResponse<'_>, nanofish::Error> {
-        self.helper_text_response("<h1>Fernserve</h1>")
+    async fn status<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
+    ) -> Result<(), nanofish::Error> {
+        Self::helper_ok_response(response).await
     }
 
-    fn status() -> Result<nanofish::HttpResponse<'static>, nanofish::Error> {
-        Self::helper_ok_response()
+    async fn not_found<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
+    ) -> Result<(), nanofish::Error> {
+        Self::helper_json_response(response, r###"{"error": "not_found"}"###).await
     }
 
-    fn not_found() -> Result<nanofish::HttpResponse<'static>, nanofish::Error> {
-        Ok(HttpResponse {
-            status_code: StatusCode::NotFound,
-            headers: Vec::new(),
-            body: ResponseBody::Text(r###"{"error": "not_found"}"###),
-        })
-    }
-
-    fn vfs_read_dir(
+    async fn vfs_read_dir<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
         &mut self,
-        request: &HttpRequest,
-    ) -> Result<nanofish::HttpResponse<'_>, nanofish::Error> {
+        request: &HttpRequest<'_>,
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
+    ) -> Result<(), nanofish::Error> {
         let path: Cow<'_, str> = Self::helper_parse_json_key(request, "path")?;
 
         match WebServerParser::vfs_read_dir(&mut self.vfs, &path) {
-            Ok(json) => self.helper_text_response(&json),
-            Err(error) => self.helper_error_response(error),
+            Ok(json) => Self::helper_json_response(response, &json).await,
+            Err(error) => self.helper_error_response(response, error).await,
         }
     }
 
-    fn vfs_create_dir(
+    async fn vfs_create_dir<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
         &mut self,
-        request: &HttpRequest,
-    ) -> Result<nanofish::HttpResponse<'_>, nanofish::Error> {
+        request: &HttpRequest<'_>,
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
+    ) -> Result<(), nanofish::Error> {
         let path: Cow<'_, str> = Self::helper_parse_json_key(request, "path")?;
 
         match WebServerParser::vfs_create_dir(&mut self.vfs, &path) {
-            Ok(_) => Self::helper_ok_response(),
-            Err(error) => self.helper_error_response(error),
+            Ok(_) => Self::helper_ok_response(response).await,
+            Err(error) => self.helper_error_response(response, error).await,
         }
     }
 
-    fn vfs_remove(
+    async fn vfs_remove<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
         &mut self,
-        request: &HttpRequest,
-    ) -> Result<nanofish::HttpResponse<'_>, nanofish::Error> {
+        request: &HttpRequest<'_>,
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
+    ) -> Result<(), nanofish::Error> {
         let path: Cow<'_, str> = Self::helper_parse_json_key(request, "path")?;
 
         match WebServerParser::vfs_remove(&mut self.vfs, &path) {
-            Ok(_) => Self::helper_ok_response(),
-            Err(error) => self.helper_error_response(error),
+            Ok(_) => Self::helper_ok_response(response).await,
+            Err(error) => self.helper_error_response(response, error).await,
         }
     }
 
-    fn vfs_rename(
+    async fn vfs_rename<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
         &mut self,
-        request: &HttpRequest,
-    ) -> Result<nanofish::HttpResponse<'_>, nanofish::Error> {
+        request: &HttpRequest<'_>,
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
+    ) -> Result<(), nanofish::Error> {
         let src_path: Cow<'_, str> = Self::helper_parse_json_key(request, "src_path")?;
         let dest_path: Cow<'_, str> = Self::helper_parse_json_key(request, "dest_path")?;
 
         match WebServerParser::vfs_rename(&mut self.vfs, &src_path, &dest_path) {
-            Ok(_) => Self::helper_ok_response(),
-            Err(error) => self.helper_error_response(error),
+            Ok(_) => Self::helper_ok_response(response).await,
+            Err(error) => self.helper_error_response(response, error).await,
         }
     }
 
@@ -157,38 +206,51 @@ impl WebServerHandler {
         }
     }
 
-    fn helper_ok_response() -> Result<nanofish::HttpResponse<'static>, nanofish::Error> {
-        Ok(HttpResponse {
-            status_code: StatusCode::Ok,
-            headers: Vec::new(),
-            body: ResponseBody::Text(r###"{"status": "ok"}"###),
-        })
+    async fn helper_ok_response<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
+    ) -> Result<(), nanofish::Error> {
+        Self::helper_json_response(response, r###"{"status": "ok"}"###).await
     }
 
-    fn helper_text_response(
-        &mut self,
+    async fn helper_json_response<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
         json: &str,
-    ) -> Result<nanofish::HttpResponse<'_>, nanofish::Error> {
-        self.buffer = String::try_from(json).map_err(|_| nanofish::error::Error::BufferOverflow)?;
+    ) -> Result<(), nanofish::Error> {
+        response
+            .send_head(
+                StatusCode::NotFound,
+                &[HttpHeader::content_type(mime_types::JSON)],
+                BodyLength::Known(json.len()),
+            )
+            .await?;
 
-        Ok(HttpResponse {
-            status_code: StatusCode::Ok,
-            headers: Vec::new(),
-            body: ResponseBody::Text(self.buffer.as_str()),
-        })
+        for chunk in json.as_bytes().chunks(CHUNK_SIZE) {
+            response.write(chunk).await?;
+        }
+
+        Ok(())
     }
 
-    fn helper_error_response(
+    async fn helper_error_response<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
         &mut self,
+        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
         error: WebServerError,
-    ) -> Result<nanofish::HttpResponse<'_>, nanofish::Error> {
+    ) -> Result<(), nanofish::Error> {
         self.buffer = String::try_from(WebServerParser::parse_error(error).as_str())
             .map_err(|_| nanofish::error::Error::BufferOverflow)?;
 
-        Ok(HttpResponse {
-            status_code: StatusCode::ServiceUnavailable,
-            headers: Vec::new(),
-            body: ResponseBody::Text(self.buffer.as_str()),
-        })
+        response
+            .send_head(
+                StatusCode::NotFound,
+                &[HttpHeader::content_type(mime_types::TEXT)],
+                BodyLength::Known(self.buffer.len()),
+            )
+            .await?;
+
+        for chunk in self.buffer.as_bytes().chunks(CHUNK_SIZE) {
+            response.write(chunk).await?;
+        }
+
+        Ok(())
     }
 }

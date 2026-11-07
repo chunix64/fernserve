@@ -1,4 +1,15 @@
+use std::process::Command;
+
 fn main() {
+    println!("cargo:rerun-if-changed=webui/");
+    let deno_status = Command::new("deno")
+        .args(["run", "build"])
+        .current_dir("webui")
+        .status()
+        .expect("Failed to execute deno, check if deno is installed!");
+
+    assert!(deno_status.success(), "Failed to build WebUI!");
+
     linker_be_nice();
     check_xtensa_linker_available();
     // make sure linkall.x is the last linker script (otherwise might cause problems with flip-link)

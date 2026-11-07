@@ -80,7 +80,7 @@ impl<T: Flash, const SIZE: usize> littlefs2::driver::Storage for LittleFsStorage
 // SAFETY: Keep the file_alloc
 pub struct LittleFsFile<'a, S: littlefs2::driver::Storage> {
     pub file: littlefs2::fs::File<'a, 'a, S>,
-    pub file_alloc: Heap<littlefs2::fs::FileAllocation<S>>,
+    pub _file_alloc: Heap<littlefs2::fs::FileAllocation<S>>,
 }
 
 impl<'a, S: littlefs2::driver::Storage> LittleFsFile<'a, S> {
@@ -100,7 +100,10 @@ impl<'a, S: littlefs2::driver::Storage> LittleFsFile<'a, S> {
                 Err(_) => return Err(FileError::FileSystem),
             };
 
-            Ok(Self { file, file_alloc })
+            Ok(Self {
+                file,
+                _file_alloc: file_alloc,
+            })
         }
     }
 }

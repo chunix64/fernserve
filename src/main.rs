@@ -25,7 +25,6 @@ mod vfs;
 use embassy_executor::Spawner;
 use embassy_time::Delay;
 use embedded_hal_async::delay::DelayNs;
-use log::warn;
 
 use crate::drivers::anyfs::AnyFs;
 use crate::drivers::littlefs::{LittleFsFileSystem, LittleFsStorage};
@@ -57,7 +56,7 @@ async fn main(spawner: Spawner) -> ! {
     // --- Configs ---
     let wifi_config = WifiConfig {
         ssid: heapless::String::try_from("YOUR_SSID").unwrap(),
-        password: heapless::String::try_from("YOUR_SSID_PASSWORD").unwrap(),
+        password: heapless::String::try_from("YOUR_SSID_PASSWOD").unwrap(),
     };
 
     // --- VFS --
@@ -84,7 +83,7 @@ async fn main(spawner: Spawner) -> ! {
             spawner.spawn(wifi_task(wifi_controller, wifi_config).unwrap());
         }
         Err(error) => {
-            warn!("[MAIN] Failed to start wifi task: {}", error);
+            log::warn!("[MAIN] Failed to start wifi task: {}", error);
         }
     }
 
