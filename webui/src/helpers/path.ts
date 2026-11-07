@@ -22,3 +22,17 @@ export function pathComponents(path: string): string[] {
 export function getBaseName(path: string) {
   return path.split("/").pop();
 }
+
+export function joinPath(dir: string, name: string): string {
+  const base = decodeURIComponent(dir).replace(/\/+$/, "");
+  return `${base}/${name}`;
+}
+
+export function isValidName(name: string): boolean {
+  return (
+    name.length > 0 &&
+    name !== "." &&
+    name !== ".." &&
+    !/[\/\\\0]/.test(name)
+  );
+}

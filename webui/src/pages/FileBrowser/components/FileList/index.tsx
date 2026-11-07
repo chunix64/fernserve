@@ -1,11 +1,18 @@
-import { useMemo, useState } from "preact/hooks";
+import {
+  type Dispatch,
+  type StateUpdater,
+  useMemo,
+  useState,
+} from "preact/hooks";
 import type { FileSystemNode } from "@/models";
 import { getBaseName } from "@/helpers/path.ts";
 import { getSizeString } from "@/helpers/size.ts";
 import { getTimeAgoString, humanizeUnixTime } from "@/helpers/date.ts";
+import FernClient from "@/api/client.ts";
 
 type FileListProps = {
   fileSystemNodes: FileSystemNode[];
+  setFileSystemNodes: Dispatch<StateUpdater<FileSystemNode[]>>;
 };
 
 type SortKey = "name" | "size" | "date";
@@ -18,7 +25,9 @@ const SORT_LABELS: Record<SortKey, string> = {
   date: "date",
 };
 
-export default function FileList({ fileSystemNodes }: FileListProps) {
+export default function FileList(
+  { fileSystemNodes, setFileSystemNodes }: FileListProps,
+) {
   const [sort, setSort] = useState<SortState>({ key: "name", order: "asc" });
 
   const sortedNodes = useMemo(
@@ -48,12 +57,15 @@ export default function FileList({ fileSystemNodes }: FileListProps) {
           <th class="name">{header("name", "Name")}</th>
           <th class="size">{header("size", "Size")}</th>
           <th class="date">{header("date", "Last modification")}</th>
+          <th class="actions">
+            <span>Actions</span>
+          </th>
         </tr>
       </thead>
       <tbody>
         {
           <tr>
-            <td colspan={3}>
+            <td colspan={4}>
               <p>
                 <span class="root-chevron">◂</span>
                 <a class="root" href="../">Parent directory</a>
@@ -61,7 +73,7 @@ export default function FileList({ fileSystemNodes }: FileListProps) {
             </td>
           </tr>
         }
-        {getEntries(sortedNodes, sort, toggleSort)}
+        {getEntries(sortedNodes, sort, toggleSort, setFileSystemNodes)}
       </tbody>
     </table>
   );
@@ -137,9 +149,10 @@ function getEntries(
   fileSystemNodes: FileSystemNode[],
   sort: SortState,
   onSort: (key: SortKey) => void,
+  setFileSystemNodes: Dispatch<StateUpdater<FileSystemNode[]>>,
 ) {
   return fileSystemNodes.map((fileSystemNode) => {
-    const isDir = fileSystemNode.nodeType === "Dir";
+    const isDir = fileSystemNode.nodeType === "dir";
     const trimmed = isDir
       ? fileSystemNode.path.replace(/\/+$/, "")
       : fileSystemNode.path;
@@ -148,17 +161,25 @@ function getEntries(
     const href = isDir ? trimmed + "/" : fileSystemNode.path;
 
     if (isDir && !(baseName === "." || baseName === "..")) {
-      return getDir(fileSystemNode, href, name);
+      return getDir(fileSystemNode, setFileSystemNodes, href, name);
     }
 
-    if (fileSystemNode.nodeType === "File") {
-      return getFile(fileSystemNode, href, name, sort, onSort);
+    if (fileSystemNode.nodeType === "file") {
+      return getFile(
+        fileSystemNode,
+        setFileSystemNodes,
+        href,
+        name,
+        sort,
+        onSort,
+      );
     }
   });
 }
 
 function getDir(
   { path, lastModified }: FileSystemNode,
+  setFileSystemNodes: Dispatch<StateUpdater<FileSystemNode[]>>,
   href: string,
   name: string,
 ) {
@@ -174,12 +195,29 @@ function getDir(
         <span>{humanizeUnixTime(lastModified)}</span>
         <span class="history">{getTimeAgoString(lastModified)}</span>
       </td>
+      <td class="actions-cell">
+        <form
+          class="rm_form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            remove(path, setFileSystemNodes);
+          }}
+        >
+          <button
+            type="submit"
+            title="Delete"
+          >
+            ✗
+          </button>
+        </form>
+      </td>
     </tr>
   );
 }
 
 function getFile(
   { path, size, lastModified }: FileSystemNode,
+  setFileSystemNodes: Dispatch<StateUpdater<FileSystemNode[]>>,
   href: string,
   name: string,
   sort: SortState,
@@ -215,6 +253,36 @@ function getFile(
         <span>{humanizeUnixTime(lastModified)}</span>
         <span class="history">{getTimeAgoString(lastModified)}</span>
       </td>
+      <td class="actions-cell">
+        <form
+          class="rm_form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            remove(path, setFileSystemNodes);
+          }}
+        >
+          <button
+            type="submit"
+            title="Delete"
+          >
+            ✗
+          </button>
+        </form>
+      </td>
     </tr>
   );
+}
+
+// Events
+async function remove(
+  path: string,
+  setFileSystemNodes: Dispatch<StateUpdater<FileSystemNode[]>>,
+) {
+  if (await FernClient.remove(path)) {
+    setFileSystemNodes((prev) =>
+      prev.filter((element) => element.path !== path)
+    );
+  } else {
+    console.error("Failed to remove directory: ", path);
+  }
 }

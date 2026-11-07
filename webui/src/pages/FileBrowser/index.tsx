@@ -4,7 +4,7 @@ import FernClient from "@/api/client.ts";
 import Title from "@/pages/FileBrowser/components/Title";
 import SearchBox from "@/pages/FileBrowser/components/SearchBox";
 import FileUploadBox from "@/pages/FileBrowser/components/FileUploadBox";
-import MakeDirectoryBox from "@/pages/FileBrowser/components/MakeDirectoryBox";
+import CreateDirectoryBox from "@/pages/FileBrowser/components/CreateDirectoryBox";
 import FileList from "@/pages/FileBrowser/components/FileList";
 import type { FileSystemNode } from "@/models";
 
@@ -35,10 +35,13 @@ export default function FileBrowser() {
       <div class="toolbar">
         <div class="tool_row upload_tools">
           <FileUploadBox />
-          <MakeDirectoryBox />
+          <CreateDirectoryBox setFileSystemNodes={setFileSystemNodes} />
         </div>
       </div>
-      <FileList fileSystemNodes={fileSystemNodes} />
+      <FileList
+        fileSystemNodes={fileSystemNodes}
+        setFileSystemNodes={setFileSystemNodes}
+      />
     </>
   );
 }

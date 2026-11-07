@@ -2,7 +2,11 @@
 @use "themes/archlinux" with ($generate_default: true);
 
 a,
-.theme li {
+button,
+input[type="file"],
+input[type="submit"],
+.theme li,
+.actions-cell button {
   cursor: pointer;
 }
 
