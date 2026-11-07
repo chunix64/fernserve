@@ -3,7 +3,7 @@ import Footer from "@/layouts/components/footer";
 import type { ComponentChildren } from "preact";
 
 interface ContainerProps {
-  children: ComponentChildren;
+  children?: ComponentChildren;
 }
 
 export default function DefaultLayout({ children }: ContainerProps) {

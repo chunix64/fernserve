@@ -16,6 +16,14 @@ export function getTheme() {
 }
 
 export function setTheme(id: ThemeId) {
-  document.documentElement.dataset.theme = id;
+  if (id == "default") {
+    document.body.removeAttribute("data-theme");
+  } else {
+    document.body.setAttribute("data-theme", id);
+  }
   localStorage.setItem(KEY, id);
+}
+
+export function loadTheme() {
+  setTheme(getTheme());
 }

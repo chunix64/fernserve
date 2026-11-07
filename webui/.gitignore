@@ -25,3 +25,4 @@ dist-ssr
 
 # Vite temporary config files
 vite.config.*.timestamp-*.mjs
+*.tsbuildinfo

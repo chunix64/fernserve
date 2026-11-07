@@ -1,58 +1,32 @@
+import { useState } from "preact/hooks";
+
+import { getTheme, setTheme, type ThemeId, THEMES } from "@/layouts/themes";
+
 export default function Header() {
+  const [themeState, setThemeState] = useState<ThemeId>(getTheme);
+
+  const selectTheme = (id: ThemeId) => {
+    setThemeState(id);
+    setTheme(id);
+  };
+
   return (
     <>
       <nav>
         <div>
           <p>Change theme...</p>
           <ul class="theme">
-            <li data-theme="default">
-              <a
-                href="javascript:updateColorScheme(&quot;default&quot;)"
-                title="Switch to Default (light/dark) theme"
-              >
-                Default (light/dark)
-              </a>
-            </li>
-            <li data-theme="squirrel">
-              <a
-                href="javascript:updateColorScheme(&quot;squirrel&quot;)"
-                title="Switch to Squirrel (light) theme"
-              >
-                Squirrel (light)
-              </a>
-            </li>
-            <li data-theme="archlinux">
-              <a
-                href="javascript:updateColorScheme(&quot;archlinux&quot;)"
-                title="Switch to Arch Linux (dark) theme"
-              >
-                Arch Linux (dark)
-              </a>
-            </li>
-            <li data-theme="ayu_dark">
-              <a
-                href="javascript:updateColorScheme(&quot;ayu_dark&quot;)"
-                title="Switch to Ayu Dark (dark) theme"
-              >
-                Ayu Dark (dark)
-              </a>
-            </li>
-            <li data-theme="zenburn">
-              <a
-                href="javascript:updateColorScheme(&quot;zenburn&quot;)"
-                title="Switch to Zenburn (dark) theme"
-              >
-                Zenburn (dark)
-              </a>
-            </li>
-            <li data-theme="monokai">
-              <a
-                href="javascript:updateColorScheme(&quot;monokai&quot;)"
-                title="Switch to Monokai (dark) theme"
-              >
-                Monokai (dark)
-              </a>
-            </li>
+            {THEMES.map(({ id, label }) => (
+              <li key={id} data-theme={id}>
+                <a
+                  title={`"Switch to ${label} theme`}
+                  aria-pressed={themeState == id}
+                  onClick={() => selectTheme(id)}
+                >
+                  {label}
+                </a>
+              </li>
+            ))}
           </ul>
         </div>
       </nav>
