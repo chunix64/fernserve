@@ -51,14 +51,15 @@ export default function FileList({ fileSystemNodes }: FileListProps) {
         </tr>
       </thead>
       <tbody>
-        {<tr>
-          <td colspan={3}>
-            <p>
-              <span class="root-chevron">◂</span>
-              <a class="root" href="../">Parent directory</a>
-            </p>
-          </td>
-        </tr>
+        {
+          <tr>
+            <td colspan={3}>
+              <p>
+                <span class="root-chevron">◂</span>
+                <a class="root" href="../">Parent directory</a>
+              </p>
+            </td>
+          </tr>
         }
         {getEntries(sortedNodes, sort, toggleSort)}
       </tbody>
@@ -69,9 +70,10 @@ export default function FileList({ fileSystemNodes }: FileListProps) {
 // Sorting
 function sortNodes(nodes: FileSystemNode[], { key, order }: SortState) {
   const dir = order === "asc" ? 1 : -1;
+
   const byName = (a: FileSystemNode, b: FileSystemNode) =>
-    getBaseName(a.path.replace(/\/+$/, "")).localeCompare(
-      getBaseName(b.path.replace(/\/+$/, "")),
+    (getBaseName(a.path.replace(/\/+$/, "")) ?? "").localeCompare(
+      getBaseName(b.path.replace(/\/+$/, "")) ?? "",
       undefined,
       { numeric: true, sensitivity: "base" },
     );
@@ -87,7 +89,8 @@ function sortNodes(nodes: FileSystemNode[], { key, order }: SortState) {
         return ((a.size ?? 0) - (b.size ?? 0)) * dir || byName(a, b);
       }
       case "date":
-        return (a.lastModified - b.lastModified) * dir || byName(a, b);
+        return (a.lastModified.getTime() - b.lastModified.getTime()) * dir ||
+          byName(a, b);
       case "name":
       default:
         return byName(a, b) * dir;
@@ -140,10 +143,11 @@ function getEntries(
     const trimmed = isDir
       ? fileSystemNode.path.replace(/\/+$/, "")
       : fileSystemNode.path;
-    const name = getBaseName(trimmed) + (isDir ? "/" : "");
+    const baseName = getBaseName(trimmed);
+    const name = baseName + (isDir ? "/" : "");
     const href = isDir ? trimmed + "/" : fileSystemNode.path;
 
-    if (isDir && !(trimmed === "/.." || trimmed === "/.")) {
+    if (isDir && !(baseName === "." || baseName === "..")) {
       return getDir(fileSystemNode, href, name);
     }
 

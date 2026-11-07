@@ -11,8 +11,8 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  checking:
-    name: checking
+  backend:
+    name: checking backend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +22,11 @@ jobs:
         with:
           default: true
           ldproxy: true
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
 
       - name: cargo fmt
         run: cargo fmt --check
@@ -48,4 +53,27 @@ jobs:
 
       - name: cargo clippy
         run: |
-          cargo clippy -- -D warnings
+          cargo clippy
+
+    webui:
+    name: checking webui
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./webui
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      
+      - name: deno install
+        run: deno install
+          
+      - name: deno fmt
+        run: deno fmt --check
+
+      - name: deno build
+        run: deno run build

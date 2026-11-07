@@ -9,12 +9,13 @@ import FileList from "@/pages/FileBrowser/components/FileList";
 import type { FileSystemNode } from "@/models";
 
 export default function FileBrowser() {
-  let [fileSystemNodes, setFileSystemNodes] = useState<FileSystemNode[]>([]);
+  const dir = location.pathname || "/";
+  const [fileSystemNodes, setFileSystemNodes] = useState<FileSystemNode[]>([]);
 
   // FileBrowser
   useEffect(() => {
     let cancelled = false;
-    FernClient.readDir("")
+    FernClient.readDir(dir)
       .then((nodes) => {
         if (!cancelled) setFileSystemNodes(nodes);
       })
@@ -22,7 +23,7 @@ export default function FileBrowser() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dir]);
 
   return (
     <>

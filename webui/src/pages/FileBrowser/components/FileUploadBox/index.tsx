@@ -14,8 +14,8 @@ export default function FileUploadBox() {
           id="file-input"
           type="file"
           name="file_to_upload"
-          required=""
-          multiple=""
+          required
+          multiple
         >
         </input>
         <button type="submit" title="Upload File">Upload file</button>

@@ -1,20 +1,28 @@
 function getPath() {
-  let paths = location.pathname.split("/").slice(1);
+  const paths = location.pathname.split("/").filter(Boolean);
 
-  if (paths[paths.length - 1] === "") {
-    paths.pop();
-  }
-
-  if (paths[0]?.length < 1) {
+  if (paths.length === 0) {
     return;
   }
 
-  return paths.map((path) => {
+  return paths.map((path, index) => {
+    const isLast = index === paths.length - 1;
+    const href = "/" + paths.slice(0, index + 1).join("/") + "/";
+
     return (
       <>
-        <span>
-          <bdi>{path}</bdi>
-        </span>/
+        {isLast
+          ? (
+            <span>
+              <bdi>{decodeURIComponent(path)}</bdi>
+            </span>
+          )
+          : (
+            <a href={href}>
+              <bdi>{decodeURIComponent(path)}</bdi>
+            </a>
+          )}
+        /
       </>
     );
   });

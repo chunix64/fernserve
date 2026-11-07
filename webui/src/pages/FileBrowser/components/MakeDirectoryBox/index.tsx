@@ -13,7 +13,7 @@ export default function MakeDirectoryBox() {
         <input
           type="text"
           name="mkdir"
-          required=""
+          required
           placeholder="Directory name"
         >
         </input>
