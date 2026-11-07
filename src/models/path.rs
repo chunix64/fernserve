@@ -62,7 +62,12 @@ impl Path {
     pub fn components(&self) -> Vec<&str> {
         let mut stack = Vec::new();
 
-        if self.as_str() == "" || self.as_str() == "/" || self.as_str() == "/." {
+        if self.as_str() == ""
+            || self.as_str() == "/"
+            || self.as_str() == "/."
+            || self.as_str() == "./"
+            || self.as_str() == "./."
+        {
             return vec!["/"];
         }
 

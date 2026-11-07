@@ -1,1 +1,0 @@
-{"version":"7.0.2","errors":true,"root":["./src/app.tsx","./src/main.tsx","./src/layouts/components/footer/index.tsx","./src/layouts/components/header/index.tsx","./src/layouts/default/index.tsx","./src/layouts/themes/index.ts","./vite.config.ts"],"packageJsons":["./package.json"]}

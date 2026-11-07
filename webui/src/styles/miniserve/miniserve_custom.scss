@@ -1,0 +1,12 @@
+// Miniserve css patches for fernserve
+@use "themes/archlinux" with ($generate_default: true);
+
+a,
+.theme li {
+  cursor: pointer;
+}
+
+.theme li,
+.container table thead tr th {
+  user-select: none;
+}

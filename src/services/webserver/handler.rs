@@ -16,23 +16,27 @@ pub struct WebServerHandler {
     buffer: String<2048>,
 }
 
-const CHUNK_SIZE: usize = 1024;
+use super::WEBSERVER_BUFFER_SIZE;
 
 // Helper macros
 macro_rules! helper_static_file {
-    ($response:ident, $path:literal, $mime:expr) => {{
+    ($response:ident, $path:literal, $mime:expr $(, $header:expr)* $(,)?) => {{
         static BODY: &[u8] =
             include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/webui/dist/", $path));
 
         $response
             .send_head(
                 StatusCode::Ok,
-                &[HttpHeader::content_type($mime)],
+                &[
+                    HttpHeader::new("Access-Control-Allow-Headers", "*"),
+                    HttpHeader::content_type($mime),
+                    $($header,)*
+                ],
                 BodyLength::Known(BODY.len()),
             )
             .await?;
 
-        for chunk in BODY.chunks(CHUNK_SIZE) {
+        for chunk in BODY.chunks(WEBSERVER_BUFFER_SIZE) {
             $response.write(chunk).await?;
         }
 
@@ -75,12 +79,17 @@ impl WebServerHandler {
         match request.route_path() {
             // static files
             // TODO: include_dir! macro
-            "/" => helper_static_file!(response, "index.html", mime_types::HTML),
+            "/" => helper_static_file!(
+                response,
+                "index.html.gz",
+                mime_types::HTML,
+                HttpHeader::new("Content-Encoding", "gzip")
+            ),
 
             // APIs
             "/api/v1/status" => Self::status(response).await,
-            "/api/v1/vfs/read_dir" => self.vfs_read_dir(request, response).await,
-            "/api/v1/vfs/create_dir" => self.vfs_create_dir(request, response).await,
+            "/api/v1/vfs/read-dir" => self.vfs_read_dir(request, response).await,
+            "/api/v1/vfs/create-dir" => self.vfs_create_dir(request, response).await,
             "/api/v1/vfs/remove" => self.vfs_remove(request, response).await,
             "/api/v1/vfs/rename" => self.vfs_rename(request, response).await,
 
@@ -96,8 +105,8 @@ impl WebServerHandler {
     ) -> Result<(), nanofish::Error> {
         match request.path {
             "/api/v1/status" => Self::status(response).await,
-            "/api/v1/vfs/read_dir" => self.vfs_read_dir(request, response).await,
-            "/api/v1/vfs/create_dir" => self.vfs_create_dir(request, response).await,
+            "/api/v1/vfs/read-dir" => self.vfs_read_dir(request, response).await,
+            "/api/v1/vfs/create-dir" => self.vfs_create_dir(request, response).await,
             "/api/v1/vfs/remove" => self.vfs_remove(request, response).await,
             "/api/v1/vfs/rename" => self.vfs_rename(request, response).await,
             _ => Self::not_found(response).await,
@@ -111,7 +120,10 @@ impl WebServerHandler {
         response
             .send_head(
                 StatusCode::MethodNotAllowed,
-                &[HttpHeader::content_type(mime_types::TEXT)],
+                &[
+                    HttpHeader::new("Access-Control-Allow-Headers", "*"),
+                    HttpHeader::content_type(mime_types::TEXT),
+                ],
                 BodyLength::Known(0),
             )
             .await?;
@@ -218,13 +230,16 @@ impl WebServerHandler {
     ) -> Result<(), nanofish::Error> {
         response
             .send_head(
-                StatusCode::NotFound,
-                &[HttpHeader::content_type(mime_types::JSON)],
+                StatusCode::Ok,
+                &[
+                    HttpHeader::new("Access-Control-Allow-Headers", "*"),
+                    HttpHeader::content_type(mime_types::JSON),
+                ],
                 BodyLength::Known(json.len()),
             )
             .await?;
 
-        for chunk in json.as_bytes().chunks(CHUNK_SIZE) {
+        for chunk in json.as_bytes().chunks(WEBSERVER_BUFFER_SIZE) {
             response.write(chunk).await?;
         }
 
@@ -242,12 +257,15 @@ impl WebServerHandler {
         response
             .send_head(
                 StatusCode::NotFound,
-                &[HttpHeader::content_type(mime_types::TEXT)],
+                &[
+                    HttpHeader::new("Access-Control-Allow-Headers", "*"),
+                    HttpHeader::content_type(mime_types::TEXT),
+                ],
                 BodyLength::Known(self.buffer.len()),
             )
             .await?;
 
-        for chunk in self.buffer.as_bytes().chunks(CHUNK_SIZE) {
+        for chunk in self.buffer.as_bytes().chunks(WEBSERVER_BUFFER_SIZE) {
             response.write(chunk).await?;
         }
 
