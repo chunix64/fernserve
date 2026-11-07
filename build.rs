@@ -2,18 +2,23 @@ use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=webui/");
-    let deno_status = Command::new("deno")
-        .args(["run", "build"])
-        .current_dir("webui")
-        .status()
-        .expect("Failed to execute deno, check if deno is installed!");
+    println!("cargo:rerun-if-changed=webui/deno.lock");
 
-    assert!(deno_status.success(), "Failed to build WebUI!");
-
+    deno(&["install"]);
+    deno(&["run", "build"]);
     linker_be_nice();
     check_xtensa_linker_available();
     // make sure linkall.x is the last linker script (otherwise might cause problems with flip-link)
     println!("cargo:rustc-link-arg=-Tlinkall.x");
+}
+
+fn deno(args: &[&str]) {
+    let status = Command::new("deno")
+        .args(args)
+        .current_dir("webui")
+        .status()
+        .expect("Failed to execute deno, check if deno is installed!");
+    assert!(status.success(), "`deno {}` failed", args.join(" "));
 }
 
 #[cfg(unix)]
