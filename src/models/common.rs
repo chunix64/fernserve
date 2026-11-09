@@ -27,6 +27,8 @@ pub enum FileSystemError {
     Mount,
     UnMounted,
     UnMountable,
+    AvailableSpace,
+    TotalSpace,
     File,
     ReadDir,
     CreateDir,

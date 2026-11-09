@@ -195,6 +195,17 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
         Ok(littlefs2::fs::Filesystem::is_mountable(&mut self.storage))
     }
 
+    fn available_space(&mut self) -> Result<usize, FileSystemError> {
+        let fs = self.fs.as_ref().ok_or(FileSystemError::AvailableSpace)?;
+        littlefs2::fs::Filesystem::available_space(&fs.borrow_mut())
+            .map_err(|_| FileSystemError::AvailableSpace)
+    }
+
+    fn total_space(&mut self) -> Result<usize, FileSystemError> {
+        let fs = self.fs.as_ref().ok_or(FileSystemError::AvailableSpace)?;
+        Ok(littlefs2::fs::Filesystem::total_space(&fs.borrow_mut()))
+    }
+
     fn open(&mut self, path: Path) -> Result<Self::File, FileSystemError> {
         let fs = self.fs.as_ref().ok_or(FileSystemError::UnMounted)?;
 

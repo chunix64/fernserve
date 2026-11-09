@@ -1,10 +1,86 @@
+use alloc::vec::Vec;
+
 use crate::{
     drivers::littlefs::{LittleFsFile, LittleFsFileSystem, LittleFsStorage},
-    models::filesystem::{File, FileSystem},
+    models::{
+        common::{FileError, FileSystemError},
+        filesystem::{File, FileSystem, FileSystemNode},
+        path::Path,
+    },
 };
 
 use crate::ESP_LITTLEFS_PARTITION_SIZE;
 
+// macros
+macro_rules! forward_fs {
+    (@one [$($variant:ident),+]
+        fn $name:ident($($arg:ident: $ty:ty),*) -> $ret:ty;
+        $call:tt
+    ) => {
+        fn $name(&mut self, $($arg: $ty),*) -> $ret {
+            match self {
+                $(Self::$variant(fs) => fs.$name $call,)+
+            }
+        }
+    };
+
+    ($vs:tt => $(fn $name:ident($($arg:ident: $ty:ty),*) -> $ret:ty;)*) => {
+        $(
+            forward_fs!(@one $vs
+                fn $name($($arg: $ty),*) -> $ret;
+                ($($arg),*)
+            );
+        )*
+    };
+}
+
+macro_rules! impl_any_file {
+    ($($variant:ident),+ $(,)?) => {
+        impl embedded_io::ErrorType for AnyFile {
+            type Error = FileError;
+        }
+
+        impl File for AnyFile {
+            fn close(self) -> Result<(), FileError> {
+                match self {
+                    $(Self::$variant(f) => File::close(f),)+
+                }
+            }
+        }
+
+        impl embedded_io::Read for AnyFile {
+            fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+                match self {
+                    $(Self::$variant(f) => embedded_io::Read::read(f, buf),)+
+                }
+            }
+        }
+
+        impl embedded_io::Write for AnyFile {
+            fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+                match self {
+                    $(Self::$variant(f) => embedded_io::Write::write(f, buf),)+
+                }
+            }
+
+            fn flush(&mut self) -> Result<(), Self::Error> {
+                match self {
+                    $(Self::$variant(f) => embedded_io::Write::flush(f),)+
+                }
+            }
+        }
+
+        impl embedded_io::Seek for AnyFile {
+            fn seek(&mut self, pos: embedded_io::SeekFrom) -> Result<u64, Self::Error> {
+                match self {
+                    $(Self::$variant(f) => embedded_io::Seek::seek(f, pos),)+
+                }
+            }
+        }
+    };
+}
+
+// Defines
 pub type InternalFlash =
     LittleFsStorage<esp_storage::FlashStorage<'static>, ESP_LITTLEFS_PARTITION_SIZE>;
 
@@ -16,135 +92,29 @@ pub enum AnyFs {
     LittleFs(LittleFsFileSystem<'static, InternalFlash>),
 }
 
-// Impl File
-impl embedded_io::ErrorType for AnyFile {
-    type Error = crate::models::common::FileError;
-}
+// impl
+impl_any_file!(LittleFsFile);
 
-impl File for AnyFile {
-    fn close(self) -> Result<(), crate::models::common::FileError> {
-        match self {
-            Self::LittleFsFile(file) => file.close(),
-        }
-    }
-}
-
-impl embedded_io::Read for AnyFile {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        match self {
-            Self::LittleFsFile(file) => file.read(buf),
-        }
-    }
-}
-
-impl embedded_io::Write for AnyFile {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        match self {
-            Self::LittleFsFile(file) => file.write(buf),
-        }
-    }
-
-    fn flush(&mut self) -> Result<(), Self::Error> {
-        match self {
-            Self::LittleFsFile(file) => file.flush(),
-        }
-    }
-}
-
-impl embedded_io::Seek for AnyFile {
-    fn seek(&mut self, pos: embedded_io::SeekFrom) -> Result<u64, Self::Error> {
-        match self {
-            Self::LittleFsFile(file) => file.seek(pos),
-        }
-    }
-}
-
-// impl FileSystem
 impl FileSystem for AnyFs {
     type File = AnyFile;
 
-    fn format(&mut self) -> Result<(), crate::models::common::FileSystemError> {
-        match self {
-            Self::LittleFs(fs) => fs.format(),
-        }
-    }
+    forward_fs!([LittleFs] =>
+        fn format() -> Result<(), FileSystemError>;
+        fn mount() -> Result<(), FileSystemError>;
+        fn is_mountable() -> Result<bool, FileSystemError>;
+        fn available_space() -> Result<usize, FileSystemError>;
+        fn total_space() -> Result<usize, FileSystemError>;
+        fn read_dir(path: Path) -> Result<Vec<FileSystemNode>, FileSystemError>;
+        fn create_dir(path: Path) -> Result<(), FileSystemError>;
+        fn create_file(path: Path) -> Result<(), FileSystemError>;
+        fn remove(path: Path) -> Result<(), FileSystemError>;
+        fn remove_all(path: Path) -> Result<(), FileSystemError>;
+        fn rename(src_path: Path, dest_path: Path) -> Result<(), FileSystemError>;
+    );
 
-    fn mount(&mut self) -> Result<(), crate::models::common::FileSystemError> {
-        match self {
-            Self::LittleFs(fs) => fs.mount(),
-        }
-    }
-
-    fn is_mountable(&mut self) -> Result<bool, crate::models::common::FileSystemError> {
-        match self {
-            Self::LittleFs(fs) => fs.is_mountable(),
-        }
-    }
-
-    fn open(
-        &mut self,
-        path: crate::models::path::Path,
-    ) -> Result<<AnyFs as FileSystem>::File, crate::models::common::FileSystemError> {
+    fn open(&mut self, path: Path) -> Result<Self::File, FileSystemError> {
         match self {
             Self::LittleFs(fs) => fs.open(path).map(AnyFile::LittleFsFile),
-        }
-    }
-
-    fn remove(
-        &mut self,
-        path: crate::models::path::Path,
-    ) -> Result<(), crate::models::common::FileSystemError> {
-        match self {
-            Self::LittleFs(fs) => fs.remove(path),
-        }
-    }
-
-    fn remove_all(
-        &mut self,
-        path: crate::models::path::Path,
-    ) -> Result<(), crate::models::common::FileSystemError> {
-        match self {
-            Self::LittleFs(fs) => fs.remove_all(path),
-        }
-    }
-
-    fn rename(
-        &mut self,
-        src_path: crate::models::path::Path,
-        dest_path: crate::models::path::Path,
-    ) -> Result<(), crate::models::common::FileSystemError> {
-        match self {
-            Self::LittleFs(fs) => fs.rename(src_path, dest_path),
-        }
-    }
-
-    fn read_dir(
-        &mut self,
-        path: crate::models::path::Path,
-    ) -> Result<
-        alloc::vec::Vec<crate::models::filesystem::FileSystemNode>,
-        crate::models::common::FileSystemError,
-    > {
-        match self {
-            Self::LittleFs(fs) => fs.read_dir(path),
-        }
-    }
-
-    fn create_dir(
-        &mut self,
-        path: crate::models::path::Path,
-    ) -> Result<(), crate::models::common::FileSystemError> {
-        match self {
-            Self::LittleFs(fs) => fs.create_dir(path),
-        }
-    }
-
-    fn create_file(
-        &mut self,
-        path: crate::models::path::Path,
-    ) -> Result<(), crate::models::common::FileSystemError> {
-        match self {
-            Self::LittleFs(fs) => fs.create_file(path),
         }
     }
 }

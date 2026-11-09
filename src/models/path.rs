@@ -4,26 +4,29 @@ use alloc::vec;
 use alloc::vec::Vec;
 use serde::{Serialize, Serializer};
 
+use crate::configs::PATH_MAX_LENGTH;
 use crate::models::common::PathError;
 
 /// Max path length in bytes, including the trailing NUL.
-pub const PATH_MAX: usize = 256;
-
 #[derive(Clone, Copy)]
 pub struct Path {
-    buf: [u8; PATH_MAX],
+    buf: [u8; PATH_MAX_LENGTH],
     len: usize,
 }
 
 impl Path {
     pub fn new(path: &str) -> Result<Self, PathError> {
         let bytes = path.as_bytes();
-        if bytes.len() > PATH_MAX {
-            log::error!("[PATH] Path too long: {} > {}", bytes.len(), PATH_MAX);
+        if bytes.len() > PATH_MAX_LENGTH {
+            log::error!(
+                "[PATH] Path too long: {} > {}",
+                bytes.len(),
+                PATH_MAX_LENGTH
+            );
             return Err(PathError::Overflow);
         }
 
-        let mut buf = [0u8; PATH_MAX];
+        let mut buf = [0u8; PATH_MAX_LENGTH];
         buf[..bytes.len()].copy_from_slice(bytes);
         Ok(Self {
             buf,

@@ -103,8 +103,10 @@ impl VirtualFileSystem {
             Err(error) => Err(error),
         }
     }
+}
 
-    // Helpers
+// Helpers
+impl VirtualFileSystem {
     fn get_filesystem(
         &mut self,
         path: Path,
