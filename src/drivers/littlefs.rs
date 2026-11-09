@@ -207,35 +207,38 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
     }
 
     fn read_dir(&mut self, path: Path) -> Result<Vec<FileSystemNode>, FileSystemError> {
-        let fs = self.fs.as_ref().ok_or(FileSystemError::ReadDir)?;
+        let fs = self
+            .fs
+            .as_ref()
+            .ok_or(FileSystemError::ReadDir)?
+            .borrow_mut();
         let path = to_lfs_path(&path).ok_or(FileSystemError::ReadDir)?;
 
-        fs.borrow_mut()
-            .read_dir_and_then(path, |read_dir| {
-                let mut nodes = Vec::new();
+        fs.read_dir_and_then(path, |read_dir| {
+            let mut nodes = Vec::new();
 
-                for entry in read_dir {
-                    let entry = match entry {
-                        Ok(entry) => entry,
-                        Err(_) => {
-                            continue;
-                        }
-                    };
+            for entry in read_dir {
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(_) => {
+                        continue;
+                    }
+                };
 
-                    let node_type = match entry.metadata().file_type() {
-                        littlefs2::fs::FileType::Dir => FileSystemNodeType::Dir,
-                        littlefs2::fs::FileType::File => FileSystemNodeType::File,
-                    };
+                let node_type = match entry.metadata().file_type() {
+                    littlefs2::fs::FileType::Dir => FileSystemNodeType::Dir,
+                    littlefs2::fs::FileType::File => FileSystemNodeType::File,
+                };
 
-                    let path = entry.path().as_str().to_owned();
-                    let path = Path::new(&path).map_err(|_| littlefs2::io::Error::IO)?;
+                let path = entry.path().as_str().to_owned();
+                let path = Path::new(&path).map_err(|_| littlefs2::io::Error::IO)?;
 
-                    nodes.push(FileSystemNode { path, node_type });
-                }
+                nodes.push(FileSystemNode { path, node_type });
+            }
 
-                Ok(nodes)
-            })
-            .map_err(|_| FileSystemError::ReadDir)
+            Ok(nodes)
+        })
+        .map_err(|_| FileSystemError::ReadDir)
     }
 
     fn create_dir(&mut self, path: Path) -> Result<(), FileSystemError> {
@@ -263,6 +266,20 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
         fs.borrow_mut()
             .remove_dir(path)
             .map_err(|_| FileSystemError::Remove)
+    }
+
+    fn remove_all(&mut self, path: Path) -> Result<(), FileSystemError> {
+        let fs = self.fs.as_ref().ok_or(FileSystemError::Remove)?;
+        let fs = fs.borrow_mut();
+        let path = to_lfs_path(&path).ok_or(FileSystemError::Remove)?;
+        let metadata = fs.metadata(path).map_err(|_| FileSystemError::RemoveAll)?;
+
+        if metadata.is_file() {
+            fs.remove(path).map_err(|_| FileSystemError::RemoveAll)
+        } else {
+            fs.remove_dir_all(path)
+                .map_err(|_| FileSystemError::RemoveAll)
+        }
     }
 
     fn rename(&mut self, src_path: Path, dest_path: Path) -> Result<(), FileSystemError> {

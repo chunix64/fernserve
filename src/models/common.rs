@@ -15,6 +15,7 @@ pub enum VirtualFileSystemError {
     CreateDir,
     CreateFile,
     Remove,
+    RemoveAll,
     Rename,
     NotImplementedYet,
 }
@@ -31,6 +32,7 @@ pub enum FileSystemError {
     CreateDir,
     CreateFile,
     Remove,
+    RemoveAll,
     Rename,
 }
 

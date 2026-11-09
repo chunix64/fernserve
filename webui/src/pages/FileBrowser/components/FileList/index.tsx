@@ -278,7 +278,7 @@ async function remove(
   path: string,
   setFileSystemNodes: Dispatch<StateUpdater<FileSystemNode[]>>,
 ) {
-  if (await FernClient.remove(path)) {
+  if (await FernClient.removeAll(path)) {
     setFileSystemNodes((prev) =>
       prev.filter((element) => element.path !== path)
     );

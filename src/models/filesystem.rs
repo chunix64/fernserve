@@ -23,6 +23,7 @@ pub trait FileSystem: Sized {
     fn create_dir(&mut self, path: Path) -> Result<(), FileSystemError>;
     fn create_file(&mut self, path: Path) -> Result<(), FileSystemError>;
     fn remove(&mut self, path: Path) -> Result<(), FileSystemError>;
+    fn remove_all(&mut self, path: Path) -> Result<(), FileSystemError>;
     fn rename(&mut self, src_path: Path, dest_path: Path) -> Result<(), FileSystemError>;
 }
 

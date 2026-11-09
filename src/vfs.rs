@@ -15,7 +15,12 @@ pub struct VirtualFileSystem {
 }
 
 impl VirtualFileSystem {
-    pub fn new(root_filesystem: AnyFs) -> Result<Self, VirtualFileSystemError> {
+    pub fn new(mut root_filesystem: AnyFs) -> Result<Self, VirtualFileSystemError> {
+        if let Ok(path) = Path::new("/dev") {
+            // Try to create the system folder /dev
+            let _ = root_filesystem.create_dir(path);
+        }
+
         Ok(Self {
             root_filesystem,
             mount_points: Vec::new(),
@@ -64,6 +69,15 @@ impl VirtualFileSystem {
             Ok((fs, fs_path, _)) => fs
                 .remove(fs_path)
                 .map_err(|_| VirtualFileSystemError::Remove),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn remove_all(&mut self, path: Path) -> Result<(), VirtualFileSystemError> {
+        match self.get_filesystem(path) {
+            Ok((fs, fs_path, _)) => fs
+                .remove_all(fs_path)
+                .map_err(|_| VirtualFileSystemError::RemoveAll),
             Err(error) => Err(error),
         }
     }

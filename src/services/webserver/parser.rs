@@ -30,6 +30,11 @@ impl WebServerParser {
         vfs.remove(path).map_err(|_| WebServerError::Parser)
     }
 
+    pub fn vfs_remove_all(vfs: &mut VirtualFileSystem, path: &str) -> Result<(), WebServerError> {
+        let path = Path::new(path).map_err(|_| WebServerError::Path)?;
+        vfs.remove_all(path).map_err(|_| WebServerError::Parser)
+    }
+
     pub fn vfs_rename(
         vfs: &mut VirtualFileSystem,
         src_path: &str,

@@ -68,8 +68,8 @@ impl PathRouterService for WebServerHandler {
     }
 }
 
+// Method specific
 impl WebServerHandler {
-    // Methods
     async fn get_handler<
         R: embedded_io_async::Read,
         W: picoserve::response::ResponseWriter<Error = R::Error>,
@@ -84,6 +84,7 @@ impl WebServerHandler {
             "/api/v1/vfs/read-dir" => self.vfs_read_dir(request, response_writer).await,
             "/api/v1/vfs/create-dir" => self.vfs_create_dir(request, response_writer).await,
             "/api/v1/vfs/remove" => self.vfs_remove(request, response_writer).await,
+            "/api/v1/vfs/remove-all" => self.vfs_remove_all(request, response_writer).await,
             "/api/v1/vfs/rename" => self.vfs_rename(request, response_writer).await,
 
             // Not founds
@@ -113,6 +114,7 @@ impl WebServerHandler {
             "/api/v1/vfs/read-dir" => self.vfs_read_dir(request, response_writer).await,
             "/api/v1/vfs/create-dir" => self.vfs_create_dir(request, response_writer).await,
             "/api/v1/vfs/remove" => self.vfs_remove(request, response_writer).await,
+            "/api/v1/vfs/remove-all" => self.vfs_remove_all(request, response_writer).await,
             "/api/v1/vfs/rename" => self.vfs_rename(request, response_writer).await,
 
             // Not founds
@@ -132,8 +134,8 @@ impl WebServerHandler {
     }
 }
 
+// Path specific
 impl WebServerHandler {
-    // Path specific
     async fn status<
         R: embedded_io_async::Read,
         W: picoserve::response::ResponseWriter<Error = R::Error>,
@@ -190,12 +192,7 @@ impl WebServerHandler {
 
         let result = { WebServerParser::vfs_create_dir(&mut self.vfs.borrow_mut(), &path) };
 
-        match result {
-            Ok(_) => Self::helper_ok_response(request, response_writer).await,
-            Err(error) => {
-                Self::helper_webserver_error_response(request, response_writer, error).await
-            }
-        }
+        Self::helper_result_response(request, response_writer, result).await
     }
 
     async fn vfs_remove<
@@ -212,12 +209,24 @@ impl WebServerHandler {
 
         let result = { WebServerParser::vfs_remove(&mut self.vfs.borrow_mut(), &path) };
 
-        match result {
-            Ok(_) => Self::helper_ok_response(request, response_writer).await,
-            Err(error) => {
-                Self::helper_webserver_error_response(request, response_writer, error).await
-            }
-        }
+        Self::helper_result_response(request, response_writer, result).await
+    }
+
+    async fn vfs_remove_all<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        mut request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        let path = Self::helper_parse_json_key(&mut request, "path")
+            .await
+            .unwrap();
+
+        let result = { WebServerParser::vfs_remove_all(&mut self.vfs.borrow_mut(), &path) };
+
+        Self::helper_result_response(request, response_writer, result).await
     }
 
     async fn vfs_rename<
@@ -239,15 +248,12 @@ impl WebServerHandler {
         let result =
             { WebServerParser::vfs_rename(&mut self.vfs.borrow_mut(), &src_path, &dest_path) };
 
-        match result {
-            Ok(_) => Self::helper_ok_response(request, response_writer).await,
-            Err(error) => {
-                Self::helper_webserver_error_response(request, response_writer, error).await
-            }
-        }
+        Self::helper_result_response(request, response_writer, result).await
     }
+}
 
-    // Helpers
+// Helpers
+impl WebServerHandler {
     async fn helper_parse_json_key<R: embedded_io_async::Read>(
         request: &mut picoserve::request::Request<'_, R>,
         key: &str,
@@ -276,6 +282,23 @@ impl WebServerHandler {
                 key,
             )?
             .ok_or(WebServerError::ParseJsonKey)?),
+        }
+    }
+
+    async fn helper_result_response<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+        T,
+    >(
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+        result: Result<T, WebServerError>,
+    ) -> Result<ResponseSent, W::Error> {
+        match result {
+            Ok(_) => Self::helper_ok_response(request, response_writer).await,
+            Err(error) => {
+                Self::helper_webserver_error_response(request, response_writer, error).await
+            }
         }
     }
 

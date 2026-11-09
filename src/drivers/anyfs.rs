@@ -99,6 +99,15 @@ impl FileSystem for AnyFs {
         }
     }
 
+    fn remove_all(
+        &mut self,
+        path: crate::models::path::Path,
+    ) -> Result<(), crate::models::common::FileSystemError> {
+        match self {
+            Self::LittleFs(fs) => fs.remove_all(path),
+        }
+    }
+
     fn rename(
         &mut self,
         src_path: crate::models::path::Path,

@@ -30,6 +30,13 @@ export default class FernClient {
 
     return response.status === "ok";
   }
+
+  static async removeAll(path: string): Promise<boolean> {
+    const uri = `${API_URI}/vfs/remove-all?path=${path}`;
+    const response = await fetchJson(uri);
+
+    return response.status === "ok";
+  }
 }
 
 async function fetchJson(uri: string) {
