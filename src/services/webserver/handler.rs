@@ -1,46 +1,31 @@
-use alloc::borrow::Cow;
-use heapless::String;
-use nanofish::{
-    BodyLength, HttpHeader, HttpMethod, HttpRequest, ResponseWriter, StatusCode, StreamingHandler,
-    mime_types,
-};
+use alloc::string::ToString;
+use core::cell::RefCell;
 
-use crate::{
-    services::webserver::{WebServerError, parser::WebServerParser},
-    vfs::VirtualFileSystem,
-};
+use alloc::string::String;
+use picoserve::ResponseSent;
+use picoserve::response::{Response, StatusCode};
+use picoserve::routing::PathRouterService;
+
+use crate::services::webserver::WebServerError;
+use crate::services::webserver::parser::WebServerParser;
+use crate::vfs::VirtualFileSystem;
 
 // Defines
 pub struct WebServerHandler {
-    vfs: VirtualFileSystem,
-    buffer: String<2048>,
+    vfs: RefCell<VirtualFileSystem>,
 }
 
-use super::WEBSERVER_BUFFER_SIZE;
-
-// Helper macros
+// Helpers macros
 macro_rules! helper_static_file {
-    ($response:ident, $path:literal, $mime:expr $(, $header:expr)* $(,)?) => {{
+    ($request:ident, $response_writer:ident, $path:literal, $mime:literal) => {{
+        let connection = $request.body_connection.finalize().await?;
+
         static BODY: &[u8] =
             include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/webui/dist/", $path));
 
-        $response
-            .send_head(
-                StatusCode::Ok,
-                &[
-                    HttpHeader::new("Access-Control-Allow-Headers", "*"),
-                    HttpHeader::content_type($mime),
-                    $($header,)*
-                ],
-                BodyLength::Known(BODY.len()),
-            )
-            .await?;
-
-        for chunk in BODY.chunks(WEBSERVER_BUFFER_SIZE) {
-            $response.write(chunk).await?;
-        }
-
-        Ok(())
+        $response_writer
+            .write_response(connection, Response::ok(BODY).with_content_type($mime))
+            .await
     }};
 }
 
@@ -48,227 +33,299 @@ macro_rules! helper_static_file {
 impl WebServerHandler {
     pub fn new(vfs: VirtualFileSystem) -> Self {
         Self {
-            vfs,
-            buffer: String::new(),
+            vfs: RefCell::new(vfs),
         }
     }
 }
 
-impl StreamingHandler for WebServerHandler {
-    async fn handle<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        &mut self,
-        request: &HttpRequest<'_>,
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
-    ) -> Result<(), nanofish::Error> {
-        log::debug!("[DEBUG] http: {:?}", request);
-        match request.method {
-            HttpMethod::GET => self.get_handler(request, response).await,
-            HttpMethod::POST => self.post_handler(request, response).await,
-            _ => self.other_handler(response).await,
+impl PathRouterService for WebServerHandler {
+    async fn call_path_router_service<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        _state: &(),
+        _current_path_parameters: (),
+        _path: picoserve::request::Path<'_>,
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        match request.parts.method() {
+            "GET" => self.get_handler(request, response_writer).await,
+            "POST" => self.post_handler(request, response_writer).await,
+            _ => self.other_handler(request, response_writer).await,
         }
     }
 }
 
 impl WebServerHandler {
     // Methods
-    async fn get_handler<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        &mut self,
-        request: &HttpRequest<'_>,
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
-    ) -> Result<(), nanofish::Error> {
-        match request.route_path() {
+    async fn get_handler<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        match request.parts.path().encoded() {
             // static files
-            // TODO: include_dir! macro
-            "/" => helper_static_file!(
-                response,
-                "index.html.gz",
-                mime_types::HTML,
-                HttpHeader::new("Content-Encoding", "gzip")
-            ),
+            "/" => helper_static_file!(request, response_writer, "index.html", "text/html"),
 
             // APIs
-            "/api/v1/status" => Self::status(response).await,
-            "/api/v1/vfs/read-dir" => self.vfs_read_dir(request, response).await,
-            "/api/v1/vfs/create-dir" => self.vfs_create_dir(request, response).await,
-            "/api/v1/vfs/remove" => self.vfs_remove(request, response).await,
-            "/api/v1/vfs/rename" => self.vfs_rename(request, response).await,
+            "/api/v1/status" => Self::status(request, response_writer).await,
+            "/api/v1/vfs/read-dir" => self.vfs_read_dir(request, response_writer).await,
+            "/api/v1/vfs/create-dir" => self.vfs_create_dir(request, response_writer).await,
+            "/api/v1/vfs/remove" => self.vfs_remove(request, response_writer).await,
+            "/api/v1/vfs/rename" => self.vfs_rename(request, response_writer).await,
 
             // Not founds
-            _ => Self::not_found(response).await,
+            _ => Self::not_found(request, response_writer).await,
         }
     }
 
-    async fn post_handler<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        &mut self,
-        request: &HttpRequest<'_>,
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
-    ) -> Result<(), nanofish::Error> {
-        match request.path {
-            "/api/v1/status" => Self::status(response).await,
-            "/api/v1/vfs/read-dir" => self.vfs_read_dir(request, response).await,
-            "/api/v1/vfs/create-dir" => self.vfs_create_dir(request, response).await,
-            "/api/v1/vfs/remove" => self.vfs_remove(request, response).await,
-            "/api/v1/vfs/rename" => self.vfs_rename(request, response).await,
-            _ => Self::not_found(response).await,
+    async fn post_handler<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        match request.parts.path().encoded() {
+            // APIs
+            "/api/v1/status" => Self::status(request, response_writer).await,
+            "/api/v1/vfs/read-dir" => self.vfs_read_dir(request, response_writer).await,
+            "/api/v1/vfs/create-dir" => self.vfs_create_dir(request, response_writer).await,
+            "/api/v1/vfs/remove" => self.vfs_remove(request, response_writer).await,
+            "/api/v1/vfs/rename" => self.vfs_rename(request, response_writer).await,
+
+            // Not founds
+            _ => Self::not_found(request, response_writer).await,
         }
     }
 
-    async fn other_handler<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        &mut self,
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
-    ) -> Result<(), nanofish::Error> {
-        response
-            .send_head(
-                StatusCode::MethodNotAllowed,
-                &[
-                    HttpHeader::new("Access-Control-Allow-Headers", "*"),
-                    HttpHeader::content_type(mime_types::TEXT),
-                ],
-                BodyLength::Known(0),
-            )
-            .await?;
+    async fn other_handler<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        Self::helper_text_response(
+            request,
+            response_writer,
+            "method_is_not_supported",
+            "text/plain",
+            StatusCode::SERVICE_UNAVAILABLE,
+        )
+        .await
+    }
+}
 
-        Ok(())
+impl WebServerHandler {
+    // Path specific
+    async fn status<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        Self::helper_ok_response(request, response_writer).await
     }
 
-    // Path specifics
-    async fn status<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
-    ) -> Result<(), nanofish::Error> {
-        Self::helper_ok_response(response).await
+    async fn not_found<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        Self::helper_json_response(request, response_writer, r###"{"error": "not_found"}"###).await
     }
 
-    async fn not_found<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
-    ) -> Result<(), nanofish::Error> {
-        Self::helper_json_response(response, r###"{"error": "not_found"}"###).await
-    }
+    async fn vfs_read_dir<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        mut request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        let path = Self::helper_parse_json_key(&mut request, "path")
+            .await
+            .unwrap();
 
-    async fn vfs_read_dir<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        &mut self,
-        request: &HttpRequest<'_>,
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
-    ) -> Result<(), nanofish::Error> {
-        let path: Cow<'_, str> = Self::helper_parse_json_key(request, "path")?;
+        let result = { WebServerParser::vfs_read_dir(&mut self.vfs.borrow_mut(), &path) };
 
-        match WebServerParser::vfs_read_dir(&mut self.vfs, &path) {
-            Ok(json) => Self::helper_json_response(response, &json).await,
-            Err(error) => self.helper_error_response(response, error).await,
+        match result {
+            Ok(json) => Self::helper_json_response(request, response_writer, &json).await,
+            Err(error) => Self::helper_error_response(request, response_writer, error).await,
         }
     }
 
-    async fn vfs_create_dir<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        &mut self,
-        request: &HttpRequest<'_>,
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
-    ) -> Result<(), nanofish::Error> {
-        let path: Cow<'_, str> = Self::helper_parse_json_key(request, "path")?;
+    async fn vfs_create_dir<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        mut request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        let path = Self::helper_parse_json_key(&mut request, "path")
+            .await
+            .unwrap();
 
-        match WebServerParser::vfs_create_dir(&mut self.vfs, &path) {
-            Ok(_) => Self::helper_ok_response(response).await,
-            Err(error) => self.helper_error_response(response, error).await,
+        let result = { WebServerParser::vfs_create_dir(&mut self.vfs.borrow_mut(), &path) };
+
+        match result {
+            Ok(_) => Self::helper_ok_response(request, response_writer).await,
+            Err(error) => Self::helper_error_response(request, response_writer, error).await,
         }
     }
 
-    async fn vfs_remove<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        &mut self,
-        request: &HttpRequest<'_>,
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
-    ) -> Result<(), nanofish::Error> {
-        let path: Cow<'_, str> = Self::helper_parse_json_key(request, "path")?;
+    async fn vfs_remove<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        mut request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        let path = Self::helper_parse_json_key(&mut request, "path")
+            .await
+            .unwrap();
 
-        match WebServerParser::vfs_remove(&mut self.vfs, &path) {
-            Ok(_) => Self::helper_ok_response(response).await,
-            Err(error) => self.helper_error_response(response, error).await,
+        let result = { WebServerParser::vfs_remove(&mut self.vfs.borrow_mut(), &path) };
+
+        match result {
+            Ok(_) => Self::helper_ok_response(request, response_writer).await,
+            Err(error) => Self::helper_error_response(request, response_writer, error).await,
         }
     }
 
-    async fn vfs_rename<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        &mut self,
-        request: &HttpRequest<'_>,
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
-    ) -> Result<(), nanofish::Error> {
-        let src_path: Cow<'_, str> = Self::helper_parse_json_key(request, "src_path")?;
-        let dest_path: Cow<'_, str> = Self::helper_parse_json_key(request, "dest_path")?;
+    async fn vfs_rename<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        mut request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        let src_path = Self::helper_parse_json_key(&mut request, "src_path")
+            .await
+            .unwrap();
 
-        match WebServerParser::vfs_rename(&mut self.vfs, &src_path, &dest_path) {
-            Ok(_) => Self::helper_ok_response(response).await,
-            Err(error) => self.helper_error_response(response, error).await,
+        let dest_path = Self::helper_parse_json_key(&mut request, "dest_path")
+            .await
+            .unwrap();
+
+        let result =
+            { WebServerParser::vfs_rename(&mut self.vfs.borrow_mut(), &src_path, &dest_path) };
+
+        match result {
+            Ok(_) => Self::helper_ok_response(request, response_writer).await,
+            Err(error) => Self::helper_error_response(request, response_writer, error).await,
         }
     }
 
     // Helpers
-    fn helper_parse_json_key<'a>(
-        request: &'a HttpRequest<'a>,
+    async fn helper_parse_json_key<R: embedded_io_async::Read>(
+        request: &mut picoserve::request::Request<'_, R>,
         key: &str,
-    ) -> Result<Cow<'a, str>, nanofish::Error> {
-        match request.method {
-            HttpMethod::POST => {
+    ) -> Result<String, WebServerError> {
+        match request.parts.method() {
+            "POST" => {
                 let body = request
-                    .body_str()
-                    .map_err(|_| nanofish::Error::InvalidUrl)?;
-                Ok(Cow::Owned(
-                    WebServerParser::parse_json_key(body, key)
-                        .map_err(|_| nanofish::Error::InvalidResponse("invalid path body"))?,
-                ))
+                    .body_connection
+                    .body()
+                    .read_all()
+                    .await
+                    .map_err(|_| WebServerError::ParseJsonKey)?;
+                Ok(
+                    WebServerParser::parse_json_key(&String::from_utf8_lossy(body), key)
+                        .map_err(|_| WebServerError::ParseJsonKey)?,
+                )
             }
-            _ => Ok(Cow::Borrowed(
-                request.query(key).ok_or(nanofish::Error::InvalidUrl)?,
-            )),
+            _ => Ok(WebServerParser::parse_query_key(
+                request
+                    .parts
+                    .query()
+                    .ok_or(WebServerError::ParseJsonKey)?
+                    .try_into_string::<2048>()
+                    .map_err(|_| WebServerError::ParseJsonKey)?
+                    .as_str(),
+                key,
+            )?
+            .ok_or(WebServerError::ParseJsonKey)?),
         }
     }
 
-    async fn helper_ok_response<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
-    ) -> Result<(), nanofish::Error> {
-        Self::helper_json_response(response, r###"{"status": "ok"}"###).await
+    async fn helper_ok_response<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        Self::helper_json_response(request, response_writer, r###"{"status": "ok"}"###).await
     }
 
-    async fn helper_json_response<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
-        json: &str,
-    ) -> Result<(), nanofish::Error> {
-        response
-            .send_head(
-                StatusCode::Ok,
-                &[
-                    HttpHeader::new("Access-Control-Allow-Headers", "*"),
-                    HttpHeader::content_type(mime_types::JSON),
-                ],
-                BodyLength::Known(json.len()),
-            )
-            .await?;
-
-        for chunk in json.as_bytes().chunks(WEBSERVER_BUFFER_SIZE) {
-            response.write(chunk).await?;
-        }
-
-        Ok(())
-    }
-
-    async fn helper_error_response<S: embedded_io_async::Write, const HEAD_SIZE: usize>(
-        &mut self,
-        response: &mut ResponseWriter<'_, S, HEAD_SIZE>,
+    async fn helper_error_response<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
         error: WebServerError,
-    ) -> Result<(), nanofish::Error> {
-        self.buffer = String::try_from(WebServerParser::parse_error(error).as_str())
-            .map_err(|_| nanofish::error::Error::BufferOverflow)?;
+    ) -> Result<ResponseSent, W::Error> {
+        Self::helper_text_response(
+            request,
+            response_writer,
+            &error.to_string(),
+            "text/plain",
+            StatusCode::SERVICE_UNAVAILABLE,
+        )
+        .await
+    }
 
-        response
-            .send_head(
-                StatusCode::NotFound,
-                &[
-                    HttpHeader::new("Access-Control-Allow-Headers", "*"),
-                    HttpHeader::content_type(mime_types::TEXT),
-                ],
-                BodyLength::Known(self.buffer.len()),
+    async fn helper_json_response<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+        json: &str,
+    ) -> Result<ResponseSent, W::Error> {
+        Self::helper_text_response(
+            request,
+            response_writer,
+            json,
+            "application/json",
+            StatusCode::OK,
+        )
+        .await
+    }
+
+    async fn helper_text_response<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+        text: &str,
+        mime: &'static str,
+        status: StatusCode,
+    ) -> Result<ResponseSent, W::Error> {
+        let connection = request.body_connection.finalize().await?;
+
+        response_writer
+            .write_response(
+                connection,
+                Response::new(status, text).with_content_type(mime),
             )
-            .await?;
-
-        for chunk in self.buffer.as_bytes().chunks(WEBSERVER_BUFFER_SIZE) {
-            response.write(chunk).await?;
-        }
-
-        Ok(())
+            .await
     }
 }

@@ -1,28 +1,90 @@
-use nanofish::EmbassyHttpServer;
+use core::fmt::Display;
+
+use embassy_executor::Spawner;
+use picoserve::routing::ServicePathRouter;
+use picoserve::{AppBuilder, AppRouter, make_static};
 use serde::Serialize;
 
+use crate::configs::{HTTP_BUFFER_SIZE, WEB_SERVER_PORT, WEB_TASK_POOL_SIZE};
 use crate::{services::webserver::handler::WebServerHandler, vfs::VirtualFileSystem};
 
 pub mod handler;
 mod parser;
 
-const WEBSERVER_BUFFER_SIZE: usize = 8192;
+static WEBSERVER_CONFIG: picoserve::Config =
+    picoserve::Config::const_default().keep_connection_alive();
 
 #[embassy_executor::task]
-pub async fn webserver_service(network_stack: embassy_net::Stack<'static>, vfs: VirtualFileSystem) {
-    let mut server = EmbassyHttpServer::<
-        WEBSERVER_BUFFER_SIZE,
-        WEBSERVER_BUFFER_SIZE,
-        WEBSERVER_BUFFER_SIZE,
-        WEBSERVER_BUFFER_SIZE,
-    >::new(80);
-    let handler = WebServerHandler::new(vfs);
+pub async fn webserver_service(
+    spawner: Spawner,
+    network_stack: embassy_net::Stack<'static>,
+    vfs: VirtualFileSystem,
+) {
+    let app_props = AppProps::new(vfs);
+    let app = make_static!(AppRouter<AppProps>, app_props.build_app());
 
-    server.serve_streaming(network_stack, handler).await;
+    for task_id in 0..WEB_TASK_POOL_SIZE {
+        spawner.spawn(web_task(task_id, network_stack, app).unwrap());
+    }
 }
 
-#[derive(Serialize)]
+// Inner logic
+struct AppProps {
+    handler: WebServerHandler,
+}
+
+impl AppProps {
+    pub fn new(vfs: VirtualFileSystem) -> Self {
+        Self {
+            handler: WebServerHandler::new(vfs),
+        }
+    }
+}
+
+impl AppBuilder for AppProps {
+    type PathRouter = ServicePathRouter<WebServerHandler>;
+
+    fn build_app(self) -> picoserve::Router<Self::PathRouter> {
+        picoserve::Router::from_service(self.handler)
+    }
+}
+
+#[embassy_executor::task(pool_size = WEB_TASK_POOL_SIZE)]
+async fn web_task(
+    task_id: usize,
+    stack: embassy_net::Stack<'static>,
+    app: &'static picoserve::AppRouter<AppProps>,
+) {
+    let port = WEB_SERVER_PORT;
+    let mut tcp_rx_buffer: [u8; HTTP_BUFFER_SIZE / 2] = [0; HTTP_BUFFER_SIZE / 2];
+    let mut tcp_tx_buffer: [u8; HTTP_BUFFER_SIZE / 2] = [0; HTTP_BUFFER_SIZE / 2];
+    let mut http_buffer: [u8; HTTP_BUFFER_SIZE] = [0; HTTP_BUFFER_SIZE];
+
+    picoserve::Server::new(app, &WEBSERVER_CONFIG, &mut http_buffer)
+        .listen_and_serve(
+            task_id,
+            stack,
+            port as u16,
+            &mut tcp_rx_buffer,
+            &mut tcp_tx_buffer,
+        )
+        .await
+        .into_never()
+}
+
+#[derive(Serialize, Debug)]
 pub enum WebServerError {
     Parser,
     Path,
+    ParseJsonKey,
+}
+
+impl Display for WebServerError {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            WebServerError::Parser => formatter.write_str("Parser"),
+            WebServerError::Path => formatter.write_str("Path"),
+            WebServerError::ParseJsonKey => formatter.write_str("ParseJsonKey"),
+        }
+    }
 }

@@ -1,5 +1,4 @@
 use alloc::string::{String, ToString};
-use log::warn;
 use serde_json::Value;
 
 use crate::{models::path::Path, services::webserver::WebServerError, vfs::VirtualFileSystem};
@@ -44,6 +43,13 @@ impl WebServerParser {
     }
 
     // helpers
+    pub fn parse_query_key(query: &str, key: &str) -> Result<Option<String>, WebServerError> {
+        let query = query.strip_prefix('?').unwrap_or(query);
+        Ok(form_urlencoded::parse(query.as_bytes())
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.into_owned()))
+    }
+
     pub fn parse_json_key(body: &str, key: &str) -> Result<String, WebServerError> {
         let value: Value = serde_json::from_str(body).map_err(|_| WebServerError::Parser)?;
 
@@ -51,15 +57,5 @@ impl WebServerParser {
             .as_str()
             .ok_or(WebServerError::Parser)?
             .to_string())
-    }
-
-    pub fn parse_error(error: WebServerError) -> String {
-        match serde_json::to_string(&error) {
-            Ok(text) => text,
-            Err(error) => {
-                warn!("[WEBSERVER] parse error failed: {}", error);
-                String::new()
-            }
-        }
     }
 }

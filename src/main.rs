@@ -15,6 +15,7 @@ extern crate alloc;
 extern crate tinyrlibc;
 
 // ---
+mod configs;
 mod drivers;
 mod hardwares;
 mod models;
@@ -22,10 +23,15 @@ mod services;
 mod utils;
 mod vfs;
 
+// ---
 use embassy_executor::Spawner;
 use embassy_time::Delay;
 use embedded_hal_async::delay::DelayNs;
 
+use crate::configs::{
+    DEFAULT_WIFI_PASSWORD, DEFAULT_WIFI_SSID, ESP_LITTLEFS_PARTITION_OFFSET,
+    ESP_LITTLEFS_PARTITION_SIZE,
+};
 use crate::drivers::anyfs::AnyFs;
 use crate::drivers::littlefs::{LittleFsFileSystem, LittleFsStorage};
 use crate::hardwares::board::Board;
@@ -37,9 +43,7 @@ use crate::services::network::{init_network_stack, net_monitor_service, net_runn
 use crate::services::webserver::webserver_service;
 use crate::vfs::VirtualFileSystem;
 
-pub const ESP_LITTLEFS_PARTITION_OFFSET: usize = 0x310000;
-pub const ESP_LITTLEFS_PARTITION_SIZE: usize = 0xF0000;
-
+// ---
 #[allow(clippy::large_stack_frames)]
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
@@ -55,8 +59,8 @@ async fn main(spawner: Spawner) -> ! {
 
     // --- Configs ---
     let wifi_config = WifiConfig {
-        ssid: heapless::String::try_from("YOUR_SSID").unwrap(),
-        password: heapless::String::try_from("YOUR_SSID_PASSWOD").unwrap(),
+        ssid: heapless::String::try_from(DEFAULT_WIFI_SSID).unwrap(),
+        password: heapless::String::try_from(DEFAULT_WIFI_PASSWORD).unwrap(),
     };
 
     // --- VFS --
@@ -90,7 +94,7 @@ async fn main(spawner: Spawner) -> ! {
     // --- Spawn service Tasks ---
     spawner.spawn(net_runner_service(network_runner).unwrap());
     spawner.spawn(net_monitor_service(network_stack).unwrap());
-    spawner.spawn(webserver_service(network_stack, vfs).unwrap());
+    spawner.spawn(webserver_service(spawner, network_stack, vfs).unwrap());
     spawner.spawn(debug_service().unwrap());
 
     loop {

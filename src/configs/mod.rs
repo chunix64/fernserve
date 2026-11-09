@@ -1,0 +1,12 @@
+pub const DEFAULT_WIFI_SSID: &str = "YOUR_WIFI_SSID";
+pub const DEFAULT_WIFI_PASSWORD: &str = "YOUR_WIFI_PASSWORD";
+
+pub const ESP_LITTLEFS_PARTITION_OFFSET: usize = 0x310000;
+pub const ESP_LITTLEFS_PARTITION_SIZE: usize = 0xF0000;
+
+pub const HTTP_BUFFER_SIZE: usize = 2048;
+pub const WEB_TASK_POOL_SIZE: usize = 8;
+pub const WEB_SERVER_PORT: usize = 80;
+
+pub const SOCKET_SIZE: usize = 4;
+pub const NET_STACK_RESOURCES_SIZE: usize = WEB_TASK_POOL_SIZE + SOCKET_SIZE;

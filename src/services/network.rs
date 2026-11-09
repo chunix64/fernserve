@@ -1,8 +1,8 @@
+use crate::configs::NET_STACK_RESOURCES_SIZE;
 use embassy_net::StackResources;
 use esp_hal::rng::Rng;
 use static_cell::StaticCell;
 
-static NET_STACK_RESOURCES_SIZE: usize = 12;
 static NET_STACK_RESOURCES: StaticCell<StackResources<NET_STACK_RESOURCES_SIZE>> =
     StaticCell::new();
 
