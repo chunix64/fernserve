@@ -164,11 +164,10 @@ impl WebServerHandler {
         mut request: picoserve::request::Request<'_, R>,
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
-        let path = Self::helper_parse_json_key(&mut request, "path")
-            .await
-            .unwrap();
-
-        let result = { WebServerParser::vfs_read_dir(&mut self.vfs.borrow_mut(), &path) };
+        let result = match Self::helper_parse_json_key(&mut request, "path").await {
+            Ok(path) => WebServerParser::vfs_read_dir(&mut self.vfs.borrow_mut(), &path),
+            Err(error) => Err(error),
+        };
 
         match result {
             Ok(json) => Self::helper_json_response(request, response_writer, &json).await,
@@ -186,11 +185,10 @@ impl WebServerHandler {
         mut request: picoserve::request::Request<'_, R>,
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
-        let path = Self::helper_parse_json_key(&mut request, "path")
-            .await
-            .unwrap();
-
-        let result = { WebServerParser::vfs_create_dir(&mut self.vfs.borrow_mut(), &path) };
+        let result = match Self::helper_parse_json_key(&mut request, "path").await {
+            Ok(path) => WebServerParser::vfs_create_dir(&mut self.vfs.borrow_mut(), &path),
+            Err(error) => Err(error),
+        };
 
         Self::helper_result_response(request, response_writer, result).await
     }
@@ -203,11 +201,10 @@ impl WebServerHandler {
         mut request: picoserve::request::Request<'_, R>,
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
-        let path = Self::helper_parse_json_key(&mut request, "path")
-            .await
-            .unwrap();
-
-        let result = { WebServerParser::vfs_remove(&mut self.vfs.borrow_mut(), &path) };
+        let result = match Self::helper_parse_json_key(&mut request, "path").await {
+            Ok(path) => WebServerParser::vfs_remove(&mut self.vfs.borrow_mut(), &path),
+            Err(error) => Err(error),
+        };
 
         Self::helper_result_response(request, response_writer, result).await
     }
@@ -220,11 +217,10 @@ impl WebServerHandler {
         mut request: picoserve::request::Request<'_, R>,
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
-        let path = Self::helper_parse_json_key(&mut request, "path")
-            .await
-            .unwrap();
-
-        let result = { WebServerParser::vfs_remove_all(&mut self.vfs.borrow_mut(), &path) };
+        let result = match Self::helper_parse_json_key(&mut request, "path").await {
+            Ok(path) => WebServerParser::vfs_remove_all(&mut self.vfs.borrow_mut(), &path),
+            Err(error) => Err(error),
+        };
 
         Self::helper_result_response(request, response_writer, result).await
     }
@@ -237,16 +233,12 @@ impl WebServerHandler {
         mut request: picoserve::request::Request<'_, R>,
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
-        let src_path = Self::helper_parse_json_key(&mut request, "src_path")
-            .await
-            .unwrap();
-
-        let dest_path = Self::helper_parse_json_key(&mut request, "dest_path")
-            .await
-            .unwrap();
-
-        let result =
-            { WebServerParser::vfs_rename(&mut self.vfs.borrow_mut(), &src_path, &dest_path) };
+        let result = async {
+            let src_path = Self::helper_parse_json_key(&mut request, "src_path").await?;
+            let dest_path = Self::helper_parse_json_key(&mut request, "dest_path").await?;
+            WebServerParser::vfs_rename(&mut self.vfs.borrow_mut(), &src_path, &dest_path)
+        }
+        .await;
 
         Self::helper_result_response(request, response_writer, result).await
     }

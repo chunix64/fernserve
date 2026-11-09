@@ -15,5 +15,5 @@ pub const WEB_SERVER_PORT: usize = 80;
 pub const SOCKET_SIZE: usize = 4;
 pub const NET_STACK_RESOURCES_SIZE: usize = WEB_TASK_POOL_SIZE + SOCKET_SIZE;
 
-// Path 
+// Path
 pub const PATH_MAX_LENGTH: usize = 256;
