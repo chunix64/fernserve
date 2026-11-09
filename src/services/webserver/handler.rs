@@ -17,14 +17,24 @@ pub struct WebServerHandler {
 
 // Helpers macros
 macro_rules! helper_static_file {
-    ($request:ident, $response_writer:ident, $path:literal, $mime:literal) => {{
+    ($request:ident,
+     $response_writer:ident,
+     $path:literal,
+     $mime:literal
+     $(, $header_key:expr => $header_value:expr)* $(,)?
+     ) => {{
         let connection = $request.body_connection.finalize().await?;
 
         static BODY: &[u8] =
             include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/webui/dist/", $path));
 
         $response_writer
-            .write_response(connection, Response::ok(BODY).with_content_type($mime))
+            .write_response(
+                connection,
+                Response::ok(BODY)
+                    .with_content_type($mime)
+                    $(.with_header($header_key, $header_value))*
+            )
             .await
     }};
 }
@@ -69,9 +79,6 @@ impl WebServerHandler {
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
         match request.parts.path().encoded() {
-            // static files
-            "/" => helper_static_file!(request, response_writer, "index.html", "text/html"),
-
             // APIs
             "/api/v1/status" => Self::status(request, response_writer).await,
             "/api/v1/vfs/read-dir" => self.vfs_read_dir(request, response_writer).await,
@@ -80,7 +87,15 @@ impl WebServerHandler {
             "/api/v1/vfs/rename" => self.vfs_rename(request, response_writer).await,
 
             // Not founds
-            _ => Self::not_found(request, response_writer).await,
+            _ => {
+                helper_static_file!(
+                    request,
+                    response_writer,
+                    "index.html.gz",
+                    "text/html",
+                    "Content-Encoding" => "gzip",
+                )
+            }
         }
     }
 
@@ -113,14 +128,7 @@ impl WebServerHandler {
         request: picoserve::request::Request<'_, R>,
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
-        Self::helper_text_response(
-            request,
-            response_writer,
-            "method_is_not_supported",
-            "text/plain",
-            StatusCode::SERVICE_UNAVAILABLE,
-        )
-        .await
+        Self::helper_error_response(request, response_writer, "Method Not Allowed", 405).await
     }
 }
 
@@ -162,7 +170,9 @@ impl WebServerHandler {
 
         match result {
             Ok(json) => Self::helper_json_response(request, response_writer, &json).await,
-            Err(error) => Self::helper_error_response(request, response_writer, error).await,
+            Err(error) => {
+                Self::helper_webserver_error_response(request, response_writer, error).await
+            }
         }
     }
 
@@ -182,7 +192,9 @@ impl WebServerHandler {
 
         match result {
             Ok(_) => Self::helper_ok_response(request, response_writer).await,
-            Err(error) => Self::helper_error_response(request, response_writer, error).await,
+            Err(error) => {
+                Self::helper_webserver_error_response(request, response_writer, error).await
+            }
         }
     }
 
@@ -202,7 +214,9 @@ impl WebServerHandler {
 
         match result {
             Ok(_) => Self::helper_ok_response(request, response_writer).await,
-            Err(error) => Self::helper_error_response(request, response_writer, error).await,
+            Err(error) => {
+                Self::helper_webserver_error_response(request, response_writer, error).await
+            }
         }
     }
 
@@ -227,7 +241,9 @@ impl WebServerHandler {
 
         match result {
             Ok(_) => Self::helper_ok_response(request, response_writer).await,
-            Err(error) => Self::helper_error_response(request, response_writer, error).await,
+            Err(error) => {
+                Self::helper_webserver_error_response(request, response_writer, error).await
+            }
         }
     }
 
@@ -273,7 +289,7 @@ impl WebServerHandler {
         Self::helper_json_response(request, response_writer, r###"{"status": "ok"}"###).await
     }
 
-    async fn helper_error_response<
+    async fn helper_webserver_error_response<
         R: embedded_io_async::Read,
         W: picoserve::response::ResponseWriter<Error = R::Error>,
     >(
@@ -281,12 +297,24 @@ impl WebServerHandler {
         response_writer: W,
         error: WebServerError,
     ) -> Result<ResponseSent, W::Error> {
+        Self::helper_error_response(request, response_writer, &error.to_string(), 503).await
+    }
+
+    async fn helper_error_response<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+        error: &str,
+        status_code: u16,
+    ) -> Result<ResponseSent, W::Error> {
         Self::helper_text_response(
             request,
             response_writer,
-            &error.to_string(),
-            "text/plain",
-            StatusCode::SERVICE_UNAVAILABLE,
+            &WebServerParser::parse_error_json(error, status_code),
+            "application/json",
+            StatusCode::new(status_code),
         )
         .await
     }

@@ -1,12 +1,12 @@
 use alloc::string::{String, ToString};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::{models::path::Path, services::webserver::WebServerError, vfs::VirtualFileSystem};
 
 pub struct WebServerParser;
 
+// path specifics
 impl WebServerParser {
-    // path specifics
     pub fn vfs_read_dir(vfs: &mut VirtualFileSystem, path: &str) -> Result<String, WebServerError> {
         let path = Path::new(path).map_err(|_| WebServerError::Path)?;
 
@@ -41,8 +41,10 @@ impl WebServerParser {
         vfs.rename(src_path, dest_path)
             .map_err(|_| WebServerError::Parser)
     }
+}
 
-    // helpers
+// helpers
+impl WebServerParser {
     pub fn parse_query_key(query: &str, key: &str) -> Result<Option<String>, WebServerError> {
         let query = query.strip_prefix('?').unwrap_or(query);
         Ok(form_urlencoded::parse(query.as_bytes())
@@ -57,5 +59,14 @@ impl WebServerParser {
             .as_str()
             .ok_or(WebServerError::Parser)?
             .to_string())
+    }
+
+    pub fn parse_error_json(error: &str, status_code: u16) -> String {
+        let json = json!({
+            "status": status_code,
+            "error": error
+        });
+
+        json.to_string()
     }
 }
