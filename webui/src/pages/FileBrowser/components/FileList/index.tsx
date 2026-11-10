@@ -229,7 +229,17 @@ function getFile(
     <tr key={path} class="entry-type-file">
       <td>
         <p>
-          <a class="file" href={href}>{name}</a>
+          {/*TODO: handle href default behavior*/}
+          <a
+            class="file"
+            data-href={href}
+            onClick={(e) => {
+              e.preventDefault();
+              downloadFile(path);
+            }}
+          >
+            {name}
+          </a>
           <span class="mobile-info size">
             <SortLink
               sortKey="size"
@@ -285,4 +295,8 @@ async function remove(
   } else {
     console.error("Failed to remove directory: ", path);
   }
+}
+
+async function downloadFile(path: string) {
+  await FernClient.downloadFile(path);
 }

@@ -6,7 +6,7 @@ use littlefs2::io::Write;
 use crate::{
     models::{
         common::{FileError, FileSystemError},
-        filesystem::{FileSystemNode, FileSystemNodeType},
+        filesystem::{FileSystemMetaData, FileSystemNode, FileSystemNodeType},
         path::Path,
     },
     utils::data_structures::Heap,
@@ -122,7 +122,7 @@ impl<'a, S: littlefs2::driver::Storage> embedded_io_async::ErrorType for LittleF
 
 impl<'a, S: littlefs2::driver::Storage> embedded_io_async::Read for LittleFsFile<'a, S> {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        self.file.read(buf).map_err(|_| FileError::FileSystem)
+        self.file.read(buf).map_err(|_| FileError::Read)
     }
 }
 
@@ -211,7 +211,7 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
     }
 
     async fn total_space(&mut self) -> Result<usize, FileSystemError> {
-        let fs = self.fs.as_ref().ok_or(FileSystemError::AvailableSpace)?;
+        let fs = self.fs.as_ref().ok_or(FileSystemError::TotalSpace)?;
         Ok(littlefs2::fs::Filesystem::total_space(&fs.borrow_mut()))
     }
 
@@ -220,6 +220,19 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
         let path = to_lfs_path(&path).ok_or(FileSystemError::Exist)?;
 
         Ok(fs.exists(path))
+    }
+
+    async fn metadata(&mut self, path: Path) -> Result<FileSystemMetaData, FileSystemError> {
+        let fs = self.fs.as_ref().ok_or(FileSystemError::Exist)?.borrow_mut();
+        let path = to_lfs_path(&path).ok_or(FileSystemError::Exist)?;
+
+        if !fs.exists(path) {
+            return Err(FileSystemError::Metadata);
+        }
+
+        fs.metadata(path)
+            .map(FileSystemMetaData::from)
+            .map_err(|_| FileSystemError::Metadata)
     }
 
     async fn open(&mut self, path: Path) -> Result<Self::File, FileSystemError> {
@@ -252,15 +265,12 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
                     }
                 };
 
-                let node_type = match entry.metadata().file_type() {
-                    littlefs2::fs::FileType::Dir => FileSystemNodeType::Dir,
-                    littlefs2::fs::FileType::File => FileSystemNodeType::File,
-                };
+                let metadata: FileSystemMetaData = entry.metadata().into();
 
                 let path = entry.path().as_str().to_owned();
                 let path = Path::new(&path).map_err(|_| littlefs2::io::Error::IO)?;
 
-                nodes.push(FileSystemNode { path, node_type });
+                nodes.push(FileSystemNode { path, metadata });
             }
 
             Ok(nodes)
@@ -335,6 +345,27 @@ fn to_lfs_seek(pos: embedded_io_async::SeekFrom) -> Option<littlefs2::io::SeekFr
         }
         embedded_io_async::SeekFrom::Current(n) => {
             i32::try_from(n).map(littlefs2::io::SeekFrom::Current).ok()
+        }
+    }
+}
+
+// Froms
+impl From<littlefs2::fs::Metadata> for FileSystemMetaData {
+    fn from(value: littlefs2::fs::Metadata) -> Self {
+        Self {
+            node_type: value.file_type().into(),
+            is_dir: value.is_dir(),
+            is_empty: value.is_empty(),
+            len: value.len(),
+        }
+    }
+}
+
+impl From<littlefs2::fs::FileType> for FileSystemNodeType {
+    fn from(value: littlefs2::fs::FileType) -> Self {
+        match value {
+            littlefs2::fs::FileType::Dir => FileSystemNodeType::Dir,
+            littlefs2::fs::FileType::File => FileSystemNodeType::File,
         }
     }
 }

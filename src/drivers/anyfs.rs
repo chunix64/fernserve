@@ -4,7 +4,7 @@ use crate::{
     drivers::littlefs::{LittleFsFile, LittleFsFileSystem, LittleFsStorage},
     models::{
         common::{FileError, FileSystemError},
-        filesystem::{File, FileSystem, FileSystemNode},
+        filesystem::{File, FileSystem, FileSystemMetaData, FileSystemNode},
         path::Path,
     },
 };
@@ -103,6 +103,7 @@ impl FileSystem for AnyFs {
         async fn mount() -> Result<(), FileSystemError>;
         async fn is_mountable() -> Result<bool, FileSystemError>;
         async fn exist(path: Path) -> Result<bool, FileSystemError>;
+        async fn metadata(path: Path) -> Result<FileSystemMetaData, FileSystemError>;
         async fn available_space() -> Result<usize, FileSystemError>;
         async fn total_space() -> Result<usize, FileSystemError>;
         async fn read_dir(path: Path) -> Result<Vec<FileSystemNode>, FileSystemError>;

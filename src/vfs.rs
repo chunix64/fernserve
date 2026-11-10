@@ -4,7 +4,7 @@ use crate::{
     drivers::anyfs::AnyFs,
     models::{
         common::VirtualFileSystemError,
-        filesystem::{FileSystem, FileSystemNode},
+        filesystem::{FileSystem, FileSystemMetaData, FileSystemNode},
         path::Path,
     },
 };
@@ -15,16 +15,16 @@ pub struct VirtualFileSystem {
 }
 
 impl VirtualFileSystem {
-    pub async fn new(mut root_filesystem: AnyFs) -> Result<Self, VirtualFileSystemError> {
+    pub async fn new(mut root_filesystem: AnyFs) -> Self {
         if let Ok(path) = Path::new("/dev") {
             // Try to create the system folder /dev
             let _ = root_filesystem.create_dir(path).await;
         }
 
-        Ok(Self {
+        Self {
             root_filesystem,
             mount_points: Vec::new(),
-        })
+        }
     }
 
     pub async fn open(
@@ -46,6 +46,39 @@ impl VirtualFileSystem {
                 .exist(fs_path)
                 .await
                 .map_err(|_| VirtualFileSystemError::Exist),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub async fn metadata(
+        &mut self,
+        path: Path,
+    ) -> Result<FileSystemMetaData, VirtualFileSystemError> {
+        match self.get_filesystem(path).await {
+            Ok((fs, fs_path, _)) => fs
+                .metadata(fs_path)
+                .await
+                .map_err(|_| VirtualFileSystemError::Metadata),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub async fn available_space(&mut self, path: Path) -> Result<usize, VirtualFileSystemError> {
+        match self.get_filesystem(path).await {
+            Ok((fs, _, _)) => fs
+                .available_space()
+                .await
+                .map_err(|_| VirtualFileSystemError::Metadata),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub async fn total_space(&mut self, path: Path) -> Result<usize, VirtualFileSystemError> {
+        match self.get_filesystem(path).await {
+            Ok((fs, _, _)) => fs
+                .total_space()
+                .await
+                .map_err(|_| VirtualFileSystemError::Metadata),
             Err(error) => Err(error),
         }
     }

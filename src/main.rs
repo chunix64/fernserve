@@ -69,17 +69,21 @@ async fn main(spawner: Spawner) -> ! {
         flash,
         ESP_LITTLEFS_PARTITION_OFFSET,
     );
-    let mut root_filesystem =
-        AnyFs::LittleFs(LittleFsFileSystem::new(littlefs_storage).expect("test"));
+    let mut root_filesystem = AnyFs::LittleFs(
+        LittleFsFileSystem::new(littlefs_storage).expect("Failed to create LittleFs filesystem"),
+    );
 
     if !root_filesystem.is_mountable().await.unwrap_or(false) {
         log::debug!("[DEBUG] File is not mountable, try format");
         root_filesystem.format().await.expect("format filesystem");
     }
 
-    root_filesystem.mount().await.expect("mount");
+    root_filesystem
+        .mount()
+        .await
+        .expect("Failed to mount root_filesystem");
 
-    let vfs = VirtualFileSystem::new(root_filesystem).await.expect("test");
+    let vfs = VirtualFileSystem::new(root_filesystem).await;
 
     // --- Spawn hardware Tasks ---
     match wifi_controller {

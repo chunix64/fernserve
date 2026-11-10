@@ -25,6 +25,7 @@ pub trait FileSystem: Sized {
     async fn available_space(&mut self) -> Result<usize, FileSystemError>;
     async fn total_space(&mut self) -> Result<usize, FileSystemError>;
     async fn exist(&mut self, path: Path) -> Result<bool, FileSystemError>;
+    async fn metadata(&mut self, path: Path) -> Result<FileSystemMetaData, FileSystemError>;
     async fn open(&mut self, path: Path) -> Result<Self::File, FileSystemError>;
     async fn read_dir(&mut self, path: Path) -> Result<Vec<FileSystemNode>, FileSystemError>;
     async fn create_dir(&mut self, path: Path) -> Result<(), FileSystemError>;
@@ -43,5 +44,13 @@ pub enum FileSystemNodeType {
 #[derive(Debug, Serialize)]
 pub struct FileSystemNode {
     pub path: Path,
+    pub metadata: FileSystemMetaData,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FileSystemMetaData {
     pub node_type: FileSystemNodeType,
+    pub is_dir: bool,
+    pub is_empty: bool,
+    pub len: usize,
 }

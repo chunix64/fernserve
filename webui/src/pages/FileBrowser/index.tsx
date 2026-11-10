@@ -34,7 +34,7 @@ export default function FileBrowser() {
       </div>
       <div class="toolbar">
         <div class="tool_row upload_tools">
-          <FileUploadBox />
+          <FileUploadBox setFileSystemNodes={setFileSystemNodes} />
           <CreateDirectoryBox setFileSystemNodes={setFileSystemNodes} />
         </div>
       </div>

@@ -2,16 +2,13 @@ use core::fmt;
 use embedded_io::ErrorKind;
 
 #[non_exhaustive]
-pub enum StorageError {}
-
-#[non_exhaustive]
 #[derive(Debug)]
 pub enum VirtualFileSystemError {
-    New,
     Dev, // Operations on /dev
     InvalidPath,
     Open,
     Exist,
+    Metadata,
     ReadDir,
     CreateDir,
     CreateFile,
@@ -27,10 +24,10 @@ pub enum FileSystemError {
     Format,
     Mount,
     UnMounted,
-    UnMountable,
     AvailableSpace,
     TotalSpace,
     Exist,
+    Metadata,
     Open,
     ReadDir,
     CreateDir,

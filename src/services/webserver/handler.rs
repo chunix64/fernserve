@@ -1,13 +1,17 @@
+use alloc::borrow::ToOwned;
+use alloc::string::String;
 use alloc::string::ToString;
+
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
-
-use alloc::string::String;
 use picoserve::ResponseSent;
+use picoserve::response::chunked::ChunkedResponse;
 use picoserve::response::{Response, StatusCode};
 use picoserve::routing::PathRouterService;
 
+use crate::configs::HTTP_REQUEST_CHUNK_SIZE;
 use crate::services::webserver::WebServerError;
+use crate::services::webserver::chunks::ChunkReader;
 use crate::services::webserver::parser::WebServerParser;
 use crate::vfs::VirtualFileSystem;
 
@@ -89,17 +93,17 @@ impl WebServerHandler {
             "/api/v1/vfs/remove" => self.vfs_remove(request, response_writer).await,
             "/api/v1/vfs/remove-all" => self.vfs_remove_all(request, response_writer).await,
             "/api/v1/vfs/rename" => self.vfs_rename(request, response_writer).await,
+            "/api/v1/vfs/download-file" => self.vfs_download_file(request, response_writer).await,
+            "/api/v1/vfs/total-space" => self.vfs_total_space(request, response_writer).await,
+            "/api/v1/vfs/available-space" => {
+                self.vfs_available_space(request, response_writer).await
+            }
+
+            // Reduce server load
+            "/favicon.ico" => Self::not_found(request, response_writer).await,
 
             // Not founds
-            _ => {
-                helper_static_file!(
-                    request,
-                    response_writer,
-                    "index.html.gz",
-                    "text/html",
-                    "Content-Encoding" => "gzip",
-                )
-            }
+            _ => self.get_default_routing(request, response_writer).await,
         }
     }
 
@@ -121,6 +125,11 @@ impl WebServerHandler {
             "/api/v1/vfs/remove-all" => self.vfs_remove_all(request, response_writer).await,
             "/api/v1/vfs/rename" => self.vfs_rename(request, response_writer).await,
             "/api/v1/vfs/upload-file" => self.vfs_upload_file(request, response_writer).await,
+            "/api/v1/vfs/download-file" => self.vfs_download_file(request, response_writer).await,
+            "/api/v1/vfs/total-space" => self.vfs_total_space(request, response_writer).await,
+            "/api/v1/vfs/available-space" => {
+                self.vfs_available_space(request, response_writer).await
+            }
 
             // Not founds
             _ => Self::not_found(request, response_writer).await,
@@ -161,6 +170,32 @@ impl WebServerHandler {
         Self::helper_json_response(request, response_writer, r###"{"error": "not_found"}"###).await
     }
 
+    async fn get_default_routing<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        if let Ok(path) = crate::models::path::Path::new(request.parts.path().encoded()) {
+            let mut vfs = self.vfs.lock().await;
+            if let Ok(metadata) = vfs.metadata(path).await
+                && !metadata.is_dir
+            {
+                return self.vfs_download_file(request, response_writer).await;
+            }
+        };
+
+        helper_static_file!(
+            request,
+            response_writer,
+            "index.html.gz",
+            "text/html",
+            "Content-Encoding" => "gzip",
+        )
+    }
+
     async fn vfs_exist<
         R: embedded_io_async::Read,
         W: picoserve::response::ResponseWriter<Error = R::Error>,
@@ -173,6 +208,50 @@ impl WebServerHandler {
             Ok(path) => WebServerParser::vfs_exist(&mut *self.vfs.lock().await, &path).await,
             Err(error) => Err(error),
         };
+
+        match result {
+            Ok(json) => Self::helper_json_response(request, response_writer, &json).await,
+            Err(error) => {
+                Self::helper_webserver_error_response(request, response_writer, error).await
+            }
+        }
+    }
+
+    async fn vfs_available_space<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        mut request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        let path = Self::helper_parse_key(&mut request, "path")
+            .await
+            .unwrap_or("/".to_owned());
+
+        let result = WebServerParser::vfs_available_space(&mut *self.vfs.lock().await, &path).await;
+
+        match result {
+            Ok(json) => Self::helper_json_response(request, response_writer, &json).await,
+            Err(error) => {
+                Self::helper_webserver_error_response(request, response_writer, error).await
+            }
+        }
+    }
+
+    async fn vfs_total_space<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        mut request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        let path = Self::helper_parse_key(&mut request, "path")
+            .await
+            .unwrap_or("/".to_owned());
+
+        let result = WebServerParser::vfs_total_space(&mut *self.vfs.lock().await, &path).await;
 
         match result {
             Ok(json) => Self::helper_json_response(request, response_writer, &json).await,
@@ -290,6 +369,61 @@ impl WebServerHandler {
         };
 
         Self::helper_result_response(request, response_writer, result).await
+    }
+
+    async fn vfs_download_file<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        mut request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        let path = match Self::helper_parse_key(&mut request, "path").await {
+            Ok(path) => path,
+            Err(error) => {
+                return Self::helper_webserver_error_response(request, response_writer, error)
+                    .await;
+            }
+        };
+
+        let Ok(path) = crate::models::path::Path::new(&path) else {
+            return Self::helper_webserver_error_response(
+                request,
+                response_writer,
+                WebServerError::Path,
+            )
+            .await;
+        };
+
+        let mut vfs = self.vfs.lock().await;
+
+        if let Ok(true) = vfs.exist(path).await {
+            let Ok(file) = vfs.open(path).await else {
+                return Self::helper_webserver_error_response(
+                    request,
+                    response_writer,
+                    WebServerError::Path,
+                )
+                .await;
+            };
+
+            let chunked_response =
+                ChunkedResponse::new(ChunkReader::new(file, "application/octet-stream"));
+
+            let connection = request.body_connection.finalize().await?;
+
+            return response_writer
+                .write_response(
+                    connection,
+                    chunked_response
+                        .into_response()
+                        .with_header("Content-Disposition", "attachment"),
+                )
+                .await;
+        }
+
+        Self::helper_webserver_error_response(request, response_writer, WebServerError::Path).await
     }
 }
 

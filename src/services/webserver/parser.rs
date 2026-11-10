@@ -28,6 +28,38 @@ impl WebServerParser {
         Ok(Self::parse_json(200, "exist", &exist))
     }
 
+    pub async fn vfs_available_space(
+        vfs: &mut VirtualFileSystem,
+        path: &str,
+    ) -> Result<String, WebServerError> {
+        let path = Path::new(path).map_err(|_| WebServerError::Path)?;
+
+        match vfs.available_space(path).await {
+            Ok(available_space) => Ok(Self::parse_json(
+                200,
+                "available_space",
+                &available_space.to_string(),
+            )),
+            Err(_) => Err(WebServerError::Parser),
+        }
+    }
+
+    pub async fn vfs_total_space(
+        vfs: &mut VirtualFileSystem,
+        path: &str,
+    ) -> Result<String, WebServerError> {
+        let path = Path::new(path).map_err(|_| WebServerError::Path)?;
+
+        match vfs.total_space(path).await {
+            Ok(total_space) => Ok(Self::parse_json(
+                200,
+                "total_space",
+                &total_space.to_string(),
+            )),
+            Err(_) => Err(WebServerError::Parser),
+        }
+    }
+
     pub async fn vfs_read_dir(
         vfs: &mut VirtualFileSystem,
         path: &str,
@@ -97,16 +129,16 @@ impl WebServerParser {
         let mut buffer = [0u8; HTTP_REQUEST_CHUNK_SIZE];
 
         loop {
-            let bytes_written = reader
+            let written_bytes = reader
                 .read(&mut buffer)
                 .await
                 .map_err(|_| WebServerError::Parser)?;
 
-            if bytes_written == 0 {
+            if written_bytes == 0 {
                 break;
             }
 
-            file.write_all(&buffer[..bytes_written])
+            file.write_all(&buffer[..written_bytes])
                 .await
                 .map_err(|_| WebServerError::Parser)?;
         }
