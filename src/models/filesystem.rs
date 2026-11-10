@@ -7,27 +7,31 @@ use crate::models::{
 };
 
 pub trait File:
-    Sized + embedded_io::ErrorType + embedded_io::Read + embedded_io::Write + embedded_io::Seek
+    Sized
+    + embedded_io_async::ErrorType
+    + embedded_io_async::Read
+    + embedded_io_async::Write
+    + embedded_io_async::Seek
 {
-    fn close(self) -> Result<(), FileError>;
+    async fn close(self) -> Result<(), FileError>;
 }
 
 pub trait FileSystem: Sized {
     type File;
 
-    fn format(&mut self) -> Result<(), FileSystemError>;
-    fn mount(&mut self) -> Result<(), FileSystemError>;
-    fn is_mountable(&mut self) -> Result<bool, FileSystemError>;
-    fn available_space(&mut self) -> Result<usize, FileSystemError>;
-    fn total_space(&mut self) -> Result<usize, FileSystemError>;
-    fn exist(&mut self, path: Path) -> Result<bool, FileSystemError>;
-    fn open(&mut self, path: Path) -> Result<Self::File, FileSystemError>;
-    fn read_dir(&mut self, path: Path) -> Result<Vec<FileSystemNode>, FileSystemError>;
-    fn create_dir(&mut self, path: Path) -> Result<(), FileSystemError>;
-    fn create_file(&mut self, path: Path) -> Result<(), FileSystemError>;
-    fn remove(&mut self, path: Path) -> Result<(), FileSystemError>;
-    fn remove_all(&mut self, path: Path) -> Result<(), FileSystemError>;
-    fn rename(&mut self, src_path: Path, dest_path: Path) -> Result<(), FileSystemError>;
+    async fn format(&mut self) -> Result<(), FileSystemError>;
+    async fn mount(&mut self) -> Result<(), FileSystemError>;
+    async fn is_mountable(&mut self) -> Result<bool, FileSystemError>;
+    async fn available_space(&mut self) -> Result<usize, FileSystemError>;
+    async fn total_space(&mut self) -> Result<usize, FileSystemError>;
+    async fn exist(&mut self, path: Path) -> Result<bool, FileSystemError>;
+    async fn open(&mut self, path: Path) -> Result<Self::File, FileSystemError>;
+    async fn read_dir(&mut self, path: Path) -> Result<Vec<FileSystemNode>, FileSystemError>;
+    async fn create_dir(&mut self, path: Path) -> Result<(), FileSystemError>;
+    async fn create_file(&mut self, path: Path) -> Result<(), FileSystemError>;
+    async fn remove(&mut self, path: Path) -> Result<(), FileSystemError>;
+    async fn remove_all(&mut self, path: Path) -> Result<(), FileSystemError>;
+    async fn rename(&mut self, src_path: Path, dest_path: Path) -> Result<(), FileSystemError>;
 }
 
 #[derive(Debug, Serialize)]

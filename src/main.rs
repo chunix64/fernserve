@@ -72,14 +72,14 @@ async fn main(spawner: Spawner) -> ! {
     let mut root_filesystem =
         AnyFs::LittleFs(LittleFsFileSystem::new(littlefs_storage).expect("test"));
 
-    if !root_filesystem.is_mountable().unwrap_or(false) {
+    if !root_filesystem.is_mountable().await.unwrap_or(false) {
         log::debug!("[DEBUG] File is not mountable, try format");
-        root_filesystem.format().expect("format filesystem");
+        root_filesystem.format().await.expect("format filesystem");
     }
 
-    root_filesystem.mount().expect("mount");
+    root_filesystem.mount().await.expect("mount");
 
-    let vfs = VirtualFileSystem::new(root_filesystem).expect("test");
+    let vfs = VirtualFileSystem::new(root_filesystem).await.expect("test");
 
     // --- Spawn hardware Tasks ---
     match wifi_controller {

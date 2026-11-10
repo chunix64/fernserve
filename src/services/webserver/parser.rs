@@ -1,6 +1,5 @@
 use alloc::string::{String, ToString};
-use embedded_io::Write;
-use embedded_io_async::Read;
+use embedded_io_async::{Read, Write};
 use picoserve::request::RequestBodyReader;
 use serde_json::{Value, json};
 
@@ -15,20 +14,27 @@ pub struct WebServerParser;
 
 // path specifics
 impl WebServerParser {
-    pub fn vfs_exist(vfs: &mut VirtualFileSystem, path: &str) -> Result<String, WebServerError> {
+    pub async fn vfs_exist(
+        vfs: &mut VirtualFileSystem,
+        path: &str,
+    ) -> Result<String, WebServerError> {
         let path = Path::new(path).map_err(|_| WebServerError::Path)?;
         let exist = vfs
             .exist(path)
+            .await
             .map_err(|_| WebServerError::Parser)?
             .to_string();
 
         Ok(Self::parse_json(200, "exist", &exist))
     }
 
-    pub fn vfs_read_dir(vfs: &mut VirtualFileSystem, path: &str) -> Result<String, WebServerError> {
+    pub async fn vfs_read_dir(
+        vfs: &mut VirtualFileSystem,
+        path: &str,
+    ) -> Result<String, WebServerError> {
         let path = Path::new(path).map_err(|_| WebServerError::Path)?;
 
-        match vfs.read_dir(path) {
+        match vfs.read_dir(path).await {
             Ok(entries) => match serde_json::to_string(&entries) {
                 Ok(data) => Ok(data),
                 Err(_) => Err(WebServerError::Parser),
@@ -38,22 +44,32 @@ impl WebServerParser {
         }
     }
 
-    pub fn vfs_create_dir(vfs: &mut VirtualFileSystem, path: &str) -> Result<(), WebServerError> {
+    pub async fn vfs_create_dir(
+        vfs: &mut VirtualFileSystem,
+        path: &str,
+    ) -> Result<(), WebServerError> {
         let path = Path::new(path).map_err(|_| WebServerError::Path)?;
-        vfs.create_dir(path).map_err(|_| WebServerError::Parser)
+        vfs.create_dir(path)
+            .await
+            .map_err(|_| WebServerError::Parser)
     }
 
-    pub fn vfs_remove(vfs: &mut VirtualFileSystem, path: &str) -> Result<(), WebServerError> {
+    pub async fn vfs_remove(vfs: &mut VirtualFileSystem, path: &str) -> Result<(), WebServerError> {
         let path = Path::new(path).map_err(|_| WebServerError::Path)?;
-        vfs.remove(path).map_err(|_| WebServerError::Parser)
+        vfs.remove(path).await.map_err(|_| WebServerError::Parser)
     }
 
-    pub fn vfs_remove_all(vfs: &mut VirtualFileSystem, path: &str) -> Result<(), WebServerError> {
+    pub async fn vfs_remove_all(
+        vfs: &mut VirtualFileSystem,
+        path: &str,
+    ) -> Result<(), WebServerError> {
         let path = Path::new(path).map_err(|_| WebServerError::Path)?;
-        vfs.remove_all(path).map_err(|_| WebServerError::Parser)
+        vfs.remove_all(path)
+            .await
+            .map_err(|_| WebServerError::Parser)
     }
 
-    pub fn vfs_rename(
+    pub async fn vfs_rename(
         vfs: &mut VirtualFileSystem,
         src_path: &str,
         dest_path: &str,
@@ -62,6 +78,7 @@ impl WebServerParser {
         let dest_path = Path::new(dest_path).map_err(|_| WebServerError::Path)?;
 
         vfs.rename(src_path, dest_path)
+            .await
             .map_err(|_| WebServerError::Parser)
     }
 
@@ -71,10 +88,12 @@ impl WebServerParser {
         mut reader: RequestBodyReader<'_, R>,
     ) -> Result<(), WebServerError> {
         let path = Path::new(path).map_err(|_| WebServerError::Path)?;
-        if let Ok(false) = vfs.exist(path) {
-            vfs.create_file(path).map_err(|_| WebServerError::Parser)?;
+        if let Ok(false) = vfs.exist(path).await {
+            vfs.create_file(path)
+                .await
+                .map_err(|_| WebServerError::Parser)?;
         }
-        let mut file = vfs.open(path).map_err(|_| WebServerError::Parser)?;
+        let mut file = vfs.open(path).await.map_err(|_| WebServerError::Parser)?;
         let mut buffer = [0u8; HTTP_REQUEST_CHUNK_SIZE];
 
         loop {
@@ -88,10 +107,11 @@ impl WebServerParser {
             }
 
             file.write_all(&buffer[..bytes_written])
+                .await
                 .map_err(|_| WebServerError::Parser)?;
         }
 
-        file.close().map_err(|_| WebServerError::Parser)
+        file.close().await.map_err(|_| WebServerError::Parser)
     }
 }
 

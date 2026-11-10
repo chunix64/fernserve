@@ -170,7 +170,7 @@ impl WebServerHandler {
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
         let result = match Self::helper_parse_key(&mut request, "path").await {
-            Ok(path) => WebServerParser::vfs_exist(&mut *self.vfs.lock().await, &path),
+            Ok(path) => WebServerParser::vfs_exist(&mut *self.vfs.lock().await, &path).await,
             Err(error) => Err(error),
         };
 
@@ -191,7 +191,7 @@ impl WebServerHandler {
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
         let result = match Self::helper_parse_key(&mut request, "path").await {
-            Ok(path) => WebServerParser::vfs_read_dir(&mut *self.vfs.lock().await, &path),
+            Ok(path) => WebServerParser::vfs_read_dir(&mut *self.vfs.lock().await, &path).await,
             Err(error) => Err(error),
         };
 
@@ -212,7 +212,7 @@ impl WebServerHandler {
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
         let result = match Self::helper_parse_key(&mut request, "path").await {
-            Ok(path) => WebServerParser::vfs_create_dir(&mut *self.vfs.lock().await, &path),
+            Ok(path) => WebServerParser::vfs_create_dir(&mut *self.vfs.lock().await, &path).await,
             Err(error) => Err(error),
         };
 
@@ -228,7 +228,7 @@ impl WebServerHandler {
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
         let result = match Self::helper_parse_key(&mut request, "path").await {
-            Ok(path) => WebServerParser::vfs_remove(&mut *self.vfs.lock().await, &path),
+            Ok(path) => WebServerParser::vfs_remove(&mut *self.vfs.lock().await, &path).await,
             Err(error) => Err(error),
         };
 
@@ -244,7 +244,7 @@ impl WebServerHandler {
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
         let result = match Self::helper_parse_key(&mut request, "path").await {
-            Ok(path) => WebServerParser::vfs_remove_all(&mut *self.vfs.lock().await, &path),
+            Ok(path) => WebServerParser::vfs_remove_all(&mut *self.vfs.lock().await, &path).await,
             Err(error) => Err(error),
         };
 
@@ -262,7 +262,7 @@ impl WebServerHandler {
         let result = async {
             let src_path = Self::helper_parse_key(&mut request, "src_path").await?;
             let dest_path = Self::helper_parse_key(&mut request, "dest_path").await?;
-            WebServerParser::vfs_rename(&mut *self.vfs.lock().await, &src_path, &dest_path)
+            WebServerParser::vfs_rename(&mut *self.vfs.lock().await, &src_path, &dest_path).await
         }
         .await;
 

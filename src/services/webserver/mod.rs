@@ -8,7 +8,8 @@ use serde::Serialize;
 use crate::configs::{HTTP_BUFFER_SIZE, WEB_SERVER_PORT, WEB_TASK_POOL_SIZE};
 use crate::{services::webserver::handler::WebServerHandler, vfs::VirtualFileSystem};
 
-pub mod handler;
+mod chunks;
+mod handler;
 mod parser;
 
 static WEBSERVER_CONFIG: picoserve::Config =
