@@ -11,6 +11,7 @@ pub enum VirtualFileSystemError {
     Dev, // Operations on /dev
     InvalidPath,
     Open,
+    Exist,
     ReadDir,
     CreateDir,
     CreateFile,
@@ -29,7 +30,8 @@ pub enum FileSystemError {
     UnMountable,
     AvailableSpace,
     TotalSpace,
-    File,
+    Exist,
+    Open,
     ReadDir,
     CreateDir,
     CreateFile,

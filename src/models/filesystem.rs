@@ -20,6 +20,7 @@ pub trait FileSystem: Sized {
     fn is_mountable(&mut self) -> Result<bool, FileSystemError>;
     fn available_space(&mut self) -> Result<usize, FileSystemError>;
     fn total_space(&mut self) -> Result<usize, FileSystemError>;
+    fn exist(&mut self, path: Path) -> Result<bool, FileSystemError>;
     fn open(&mut self, path: Path) -> Result<Self::File, FileSystemError>;
     fn read_dir(&mut self, path: Path) -> Result<Vec<FileSystemNode>, FileSystemError>;
     fn create_dir(&mut self, path: Path) -> Result<(), FileSystemError>;

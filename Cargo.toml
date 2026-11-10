@@ -28,6 +28,7 @@ esp-storage = { version = "0.10.0", features = ["embedded-storage", "esp32"] }
 esp-println = { version = "0.18.0", features = ["esp32", "log-04"] }
 
 embassy-executor = { version = "0.10.0", features = [] }
+embassy-sync = "0.8.0"
 embassy-time = "0.5.0"
 embassy-net = { version = "0.9.1", features = ["dhcpv4", "dns", "medium-ethernet", "tcp", "udp"] }
 smoltcp = { version = "0.14.0", default-features = false, features = [

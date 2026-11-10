@@ -1,12 +1,30 @@
 use alloc::string::{String, ToString};
+use embedded_io::Write;
+use embedded_io_async::Read;
+use picoserve::request::RequestBodyReader;
 use serde_json::{Value, json};
 
-use crate::{models::path::Path, services::webserver::WebServerError, vfs::VirtualFileSystem};
+use crate::{
+    configs::HTTP_REQUEST_CHUNK_SIZE,
+    models::{filesystem::File, path::Path},
+    services::webserver::WebServerError,
+    vfs::VirtualFileSystem,
+};
 
 pub struct WebServerParser;
 
 // path specifics
 impl WebServerParser {
+    pub fn vfs_exist(vfs: &mut VirtualFileSystem, path: &str) -> Result<String, WebServerError> {
+        let path = Path::new(path).map_err(|_| WebServerError::Path)?;
+        let exist = vfs
+            .exist(path)
+            .map_err(|_| WebServerError::Parser)?
+            .to_string();
+
+        Ok(Self::parse_json(200, "exist", &exist))
+    }
+
     pub fn vfs_read_dir(vfs: &mut VirtualFileSystem, path: &str) -> Result<String, WebServerError> {
         let path = Path::new(path).map_err(|_| WebServerError::Path)?;
 
@@ -46,6 +64,35 @@ impl WebServerParser {
         vfs.rename(src_path, dest_path)
             .map_err(|_| WebServerError::Parser)
     }
+
+    pub async fn vfs_upload_file<R: embedded_io_async::Read>(
+        vfs: &mut VirtualFileSystem,
+        path: &str,
+        mut reader: RequestBodyReader<'_, R>,
+    ) -> Result<(), WebServerError> {
+        let path = Path::new(path).map_err(|_| WebServerError::Path)?;
+        if let Ok(false) = vfs.exist(path) {
+            vfs.create_file(path).map_err(|_| WebServerError::Parser)?;
+        }
+        let mut file = vfs.open(path).map_err(|_| WebServerError::Parser)?;
+        let mut buffer = [0u8; HTTP_REQUEST_CHUNK_SIZE];
+
+        loop {
+            let bytes_written = reader
+                .read(&mut buffer)
+                .await
+                .map_err(|_| WebServerError::Parser)?;
+
+            if bytes_written == 0 {
+                break;
+            }
+
+            file.write_all(&buffer[..bytes_written])
+                .map_err(|_| WebServerError::Parser)?;
+        }
+
+        file.close().map_err(|_| WebServerError::Parser)
+    }
 }
 
 // helpers
@@ -66,7 +113,16 @@ impl WebServerParser {
             .to_string())
     }
 
-    pub fn parse_error_json(error: &str, status_code: u16) -> String {
+    pub fn parse_json(status_code: u16, key: &str, value: &str) -> String {
+        let json = json!({
+            "status": status_code,
+            key: value
+        });
+
+        json.to_string()
+    }
+
+    pub fn parse_error_json(status_code: u16, error: &str) -> String {
         let json = json!({
             "status": status_code,
             "error": error

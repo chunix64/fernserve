@@ -102,6 +102,7 @@ impl FileSystem for AnyFs {
         fn format() -> Result<(), FileSystemError>;
         fn mount() -> Result<(), FileSystemError>;
         fn is_mountable() -> Result<bool, FileSystemError>;
+        fn exist(path: Path) -> Result<bool, FileSystemError>;
         fn available_space() -> Result<usize, FileSystemError>;
         fn total_space() -> Result<usize, FileSystemError>;
         fn read_dir(path: Path) -> Result<Vec<FileSystemNode>, FileSystemError>;

@@ -1125,6 +1125,7 @@ dependencies = [
  "critical-section",
  "embassy-executor",
  "embassy-net",
+ "embassy-sync 0.8.0",
  "embassy-time",
  "embedded-hal-async",
  "embedded-io 0.7.1",

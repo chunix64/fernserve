@@ -37,6 +37,13 @@ impl VirtualFileSystem {
         }
     }
 
+    pub fn exist(&mut self, path: Path) -> Result<bool, VirtualFileSystemError> {
+        match self.get_filesystem(path) {
+            Ok((fs, fs_path, _)) => fs.exist(fs_path).map_err(|_| VirtualFileSystemError::Exist),
+            Err(error) => Err(error),
+        }
+    }
+
     pub fn read_dir(&mut self, path: Path) -> Result<Vec<FileSystemNode>, VirtualFileSystemError> {
         match self.get_filesystem(path) {
             Ok((fs, fs_path, _)) => fs

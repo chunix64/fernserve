@@ -77,6 +77,7 @@ pub enum WebServerError {
     Parser,
     Path,
     ParseJsonKey,
+    ParseParamKey,
 }
 
 impl Display for WebServerError {
@@ -85,6 +86,7 @@ impl Display for WebServerError {
             WebServerError::Parser => formatter.write_str("Parser"),
             WebServerError::Path => formatter.write_str("Path"),
             WebServerError::ParseJsonKey => formatter.write_str("ParseJsonKey"),
+            WebServerError::ParseParamKey => formatter.write_str("ParseParamKey"),
         }
     }
 }

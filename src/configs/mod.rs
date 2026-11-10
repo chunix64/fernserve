@@ -7,9 +7,10 @@ pub const ESP_LITTLEFS_PARTITION_OFFSET: usize = 0x310000;
 pub const ESP_LITTLEFS_PARTITION_SIZE: usize = 0xF0000;
 
 // Web Server
-pub const HTTP_BUFFER_SIZE: usize = 2048;
-pub const WEB_TASK_POOL_SIZE: usize = 4;
 pub const WEB_SERVER_PORT: usize = 80;
+pub const WEB_TASK_POOL_SIZE: usize = 4;
+pub const HTTP_BUFFER_SIZE: usize = 2048;
+pub const HTTP_REQUEST_CHUNK_SIZE: usize = 2048;
 
 // Net Service
 pub const SOCKET_SIZE: usize = 4;
