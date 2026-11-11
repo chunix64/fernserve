@@ -35,7 +35,7 @@ impl VirtualFileSystem {
             Ok((fs, fs_path, _)) => fs
                 .open(fs_path)
                 .await
-                .map_err(|_| VirtualFileSystemError::Open),
+                .map_err(VirtualFileSystemError::FileSystemError),
             Err(error) => Err(error),
         }
     }
@@ -45,7 +45,7 @@ impl VirtualFileSystem {
             Ok((fs, fs_path, _)) => fs
                 .exists(fs_path)
                 .await
-                .map_err(|_| VirtualFileSystemError::Exist),
+                .map_err(VirtualFileSystemError::FileSystemError),
             Err(error) => Err(error),
         }
     }
@@ -58,7 +58,7 @@ impl VirtualFileSystem {
             Ok((fs, fs_path, _)) => fs
                 .metadata(fs_path)
                 .await
-                .map_err(|_| VirtualFileSystemError::Metadata),
+                .map_err(VirtualFileSystemError::FileSystemError),
             Err(error) => Err(error),
         }
     }
@@ -68,7 +68,7 @@ impl VirtualFileSystem {
             Ok((fs, _, _)) => fs
                 .available_space()
                 .await
-                .map_err(|_| VirtualFileSystemError::Metadata),
+                .map_err(VirtualFileSystemError::FileSystemError),
             Err(error) => Err(error),
         }
     }
@@ -78,7 +78,7 @@ impl VirtualFileSystem {
             Ok((fs, _, _)) => fs
                 .total_space()
                 .await
-                .map_err(|_| VirtualFileSystemError::Metadata),
+                .map_err(VirtualFileSystemError::FileSystemError),
             Err(error) => Err(error),
         }
     }
@@ -91,12 +91,12 @@ impl VirtualFileSystem {
             Ok((fs, fs_path, _)) => fs
                 .read_dir(fs_path)
                 .await
-                .map_err(|_| VirtualFileSystemError::ReadDir),
+                .map_err(VirtualFileSystemError::FileSystemError),
             Err(VirtualFileSystemError::Dev) => self
                 .root_filesystem
-                .read_dir(Path::new("/dev").map_err(|_| VirtualFileSystemError::ReadDir)?)
+                .read_dir(Path::new("/dev").map_err(|_| VirtualFileSystemError::Dev)?)
                 .await
-                .map_err(|_| VirtualFileSystemError::ReadDir),
+                .map_err(VirtualFileSystemError::FileSystemError),
             Err(error) => Err(error),
         }
     }
@@ -106,7 +106,7 @@ impl VirtualFileSystem {
             Ok((fs, fs_path, _)) => fs
                 .create_dir(fs_path)
                 .await
-                .map_err(|_| VirtualFileSystemError::CreateDir),
+                .map_err(VirtualFileSystemError::FileSystemError),
             Err(error) => Err(error),
         }
     }
@@ -116,7 +116,7 @@ impl VirtualFileSystem {
             Ok((fs, fs_path, _)) => fs
                 .create_file(fs_path)
                 .await
-                .map_err(|_| VirtualFileSystemError::CreateFile),
+                .map_err(VirtualFileSystemError::FileSystemError),
             Err(error) => Err(error),
         }
     }
@@ -126,7 +126,7 @@ impl VirtualFileSystem {
             Ok((fs, fs_path, _)) => fs
                 .remove(fs_path)
                 .await
-                .map_err(|_| VirtualFileSystemError::Remove),
+                .map_err(VirtualFileSystemError::FileSystemError),
             Err(error) => Err(error),
         }
     }
@@ -136,7 +136,7 @@ impl VirtualFileSystem {
             Ok((fs, fs_path, _)) => fs
                 .remove_all(fs_path)
                 .await
-                .map_err(|_| VirtualFileSystemError::RemoveAll),
+                .map_err(VirtualFileSystemError::FileSystemError),
             Err(error) => Err(error),
         }
     }
@@ -153,7 +153,7 @@ impl VirtualFileSystem {
             return dest_fs
                 .rename(fs_src_path, fs_dest_path)
                 .await
-                .map_err(|_| VirtualFileSystemError::Rename);
+                .map_err(VirtualFileSystemError::FileSystemError);
         }
 
         // TODO: Moving file between filesystems

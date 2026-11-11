@@ -2,6 +2,7 @@ use alloc::borrow::ToOwned;
 use alloc::string::String;
 use alloc::string::ToString;
 
+use anyhow::{Result, anyhow};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use picoserve::ResponseSent;
@@ -10,7 +11,6 @@ use picoserve::response::{Response, StatusCode};
 use picoserve::routing::PathRouterService;
 
 use crate::services::webserver::chunks::ChunkReader;
-use crate::services::webserver::errors::WebServerError;
 use crate::services::webserver::parser::WebServerParser;
 use crate::vfs::VirtualFileSystem;
 
@@ -385,12 +385,10 @@ impl WebServerHandler {
             let path = Self::helper_parse_param_key(&mut request, "path").await?;
             let chunk_index: usize = Self::helper_parse_param_key(&mut request, "chunk_index")
                 .await?
-                .parse()
-                .map_err(|_| WebServerError::ParseParamKey)?;
+                .parse()?;
             let total_chunks: usize = Self::helper_parse_param_key(&mut request, "total_chunks")
                 .await?
-                .parse()
-                .map_err(|_| WebServerError::ParseParamKey)?;
+                .parse()?;
 
             WebServerParser::vfs_upload_file_chunk(
                 &mut *self.vfs.lock().await,
@@ -427,43 +425,60 @@ impl WebServerHandler {
             }
         };
 
-        let Ok(path) = crate::models::path::Path::new(&path) else {
-            return Self::helper_webserver_error_response(
-                request,
-                response_writer,
-                WebServerError::Path,
-            )
-            .await;
+        let path = match crate::models::path::Path::new(&path) {
+            Ok(path) => path,
+            Err(error) => {
+                return Self::helper_webserver_error_response(
+                    request,
+                    response_writer,
+                    error.into(),
+                )
+                .await;
+            }
         };
 
         let mut vfs = self.vfs.lock().await;
 
         if let Ok(true) = vfs.exists(path).await {
-            let Ok(file) = vfs.open(path).await else {
-                return Self::helper_webserver_error_response(
-                    request,
-                    response_writer,
-                    WebServerError::VfsOpen,
-                )
-                .await;
+            let file = match vfs.open(path).await {
+                Ok(file) => file,
+                Err(error) => {
+                    return Self::helper_webserver_error_response(
+                        request,
+                        response_writer,
+                        error.into(),
+                    )
+                    .await;
+                }
             };
-
-            let chunked_response =
-                ChunkedResponse::new(ChunkReader::new(file, "application/octet-stream"));
 
             let connection = request.body_connection.finalize().await?;
 
-            return response_writer
-                .write_response(
-                    connection,
-                    chunked_response
-                        .into_response()
-                        .with_header("Content-Disposition", "inline"),
-                )
-                .await;
+            let chunked_response =
+                ChunkedResponse::new(ChunkReader::new(file, "application/octet-stream"))
+                    .into_response()
+                    .with_header("Content-Disposition", "inline");
+
+            if let Ok(metadata) = vfs.metadata(path).await {
+                return response_writer
+                    .write_response(
+                        connection,
+                        chunked_response.with_header("Content-Length", metadata.len),
+                    )
+                    .await;
+            } else {
+                return response_writer
+                    .write_response(connection, chunked_response)
+                    .await;
+            }
         }
 
-        Self::helper_webserver_error_response(request, response_writer, WebServerError::Path).await
+        Self::helper_webserver_error_response(
+            request,
+            response_writer,
+            crate::models::errors::VirtualFileSystemError::InvalidPath.into(),
+        )
+        .await
     }
 }
 
@@ -472,7 +487,7 @@ impl WebServerHandler {
     async fn helper_parse_key<R: embedded_io_async::Read>(
         request: &mut picoserve::request::Request<'_, R>,
         key: &str,
-    ) -> Result<String, WebServerError> {
+    ) -> Result<String> {
         match request.parts.method() {
             "POST" => Self::helper_parse_json_key(request, key).await,
             _ => Self::helper_parse_param_key(request, key).await,
@@ -482,33 +497,23 @@ impl WebServerHandler {
     async fn helper_parse_json_key<R: embedded_io_async::Read>(
         request: &mut picoserve::request::Request<'_, R>,
         key: &str,
-    ) -> Result<String, WebServerError> {
-        let body = request
-            .body_connection
-            .body()
-            .read_all()
-            .await
-            .map_err(|_| WebServerError::ParseJsonKey)?;
+    ) -> Result<String> {
+        let body = request.body_connection.body().read_all().await?;
+
         WebServerParser::parse_json_key(&String::from_utf8_lossy(body), key)
-            .map_err(|_| WebServerError::ParseJsonKey)
     }
 
     async fn helper_parse_param_key<R: embedded_io_async::Read>(
         request: &mut picoserve::request::Request<'_, R>,
         key: &str,
-    ) -> Result<String, WebServerError> {
-        WebServerParser::parse_query_key(
-            request
-                .parts
-                .query()
-                .ok_or(WebServerError::ParseParamKey)?
-                .try_into_string::<2048>()
-                .map_err(|_| WebServerError::ParseParamKey)?
-                .as_str(),
-            key,
-        )
-        .map_err(|_| WebServerError::ParseParamKey)?
-        .ok_or(WebServerError::ParseParamKey)
+    ) -> Result<String> {
+        let query = request
+            .parts
+            .query()
+            .ok_or(anyhow!("Request parse query failed"))?
+            .try_into_string::<2048>()?;
+
+        WebServerParser::parse_param_key(&query, key)?.ok_or(anyhow!("Parse param key failed"))
     }
 
     async fn helper_result_response<
@@ -518,7 +523,7 @@ impl WebServerHandler {
     >(
         request: picoserve::request::Request<'_, R>,
         response_writer: W,
-        result: Result<T, WebServerError>,
+        result: Result<T>,
     ) -> Result<ResponseSent, W::Error> {
         match result {
             Ok(_) => Self::helper_ok_response(request, response_writer).await,
@@ -544,7 +549,7 @@ impl WebServerHandler {
     >(
         request: picoserve::request::Request<'_, R>,
         response_writer: W,
-        error: WebServerError,
+        error: anyhow::Error,
     ) -> Result<ResponseSent, W::Error> {
         Self::helper_error_response(request, response_writer, &error.to_string(), 503).await
     }

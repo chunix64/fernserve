@@ -1,86 +1,86 @@
-use core::fmt;
 use embedded_io::ErrorKind;
+use thiserror::Error;
 
 #[non_exhaustive]
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum VirtualFileSystemError {
-    Dev, // Operations on /dev
+    #[error("Operations on /dev are not supported")]
+    Dev,
+    #[error("Invalid path")]
     InvalidPath,
-    Open,
-    Exist,
-    Metadata,
-    ReadDir,
-    CreateDir,
-    CreateFile,
-    Remove,
-    RemoveAll,
-    Rename,
+    #[error("Not implemented yet")]
     NotImplementedYet,
+    #[error("Filesystem error: {0}")]
+    FileSystemError(#[from] FileSystemError),
 }
 
 #[non_exhaustive]
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum FileSystemError {
+    #[error("Failed to format filesystem")]
     Format,
+    #[error("Failed to mount filesystem")]
     Mount,
+    #[error("Filesystem is not mounted")]
     UnMounted,
+    #[error("Failed to get available space")]
     AvailableSpace,
+    #[error("Failed to get total space")]
     TotalSpace,
-    Exist,
+    #[error("Failed to check existence")]
+    Exists,
+    #[error("Failed to get metadata")]
     Metadata,
+    #[error("Failed to open file")]
     Open,
+    #[error("Failed to read directory")]
     ReadDir,
+    #[error("Failed to create directory")]
     CreateDir,
+    #[error("Failed to create file")]
     CreateFile,
+    #[error("Failed to remove entry")]
     Remove,
+    #[error("Failed to remove directory recursively")]
     RemoveAll,
+    #[error("Failed to rename entry")]
     Rename,
 }
 
 #[non_exhaustive]
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum FileError {
+    #[error("Filesystem error")]
     FileSystem,
+    #[error("Failed to close file")]
     Close,
+    #[error("Failed to read file")]
     Read,
+    #[error("Failed to flush file")]
     Flush,
+    #[error("Failed to write file")]
     Write,
+    #[error("Failed to seek in file")]
     Seek,
+    #[error("Failed to truncate file")]
     Truncate,
 }
 
 #[non_exhaustive]
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum PathError {
+    #[error("Path exceeds buffer capacity")]
     Overflow,
 }
 
-impl fmt::Display for FileError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FileError::FileSystem => formatter.write_str("FileSystem"),
-            FileError::Close => formatter.write_str("Close"),
-            FileError::Read => formatter.write_str("Read"),
-            FileError::Flush => formatter.write_str("Flush"),
-            FileError::Write => formatter.write_str("Write"),
-            FileError::Seek => formatter.write_str("Seek"),
-            FileError::Truncate => formatter.write_str("Truncate"),
-        }
+impl From<PathError> for VirtualFileSystemError {
+    fn from(_: PathError) -> Self {
+        Self::InvalidPath
     }
 }
 
-impl core::error::Error for FileError {}
-
 impl embedded_io::Error for FileError {
     fn kind(&self) -> ErrorKind {
-        match self {
-            FileError::FileSystem => ErrorKind::Other,
-            FileError::Close => ErrorKind::Other,
-            FileError::Read => ErrorKind::Other,
-            FileError::Flush => ErrorKind::Other,
-            FileError::Write => ErrorKind::Other,
-            FileError::Seek => ErrorKind::Other,
-            FileError::Truncate => ErrorKind::Other,
-        }
+        ErrorKind::Other
     }
 }

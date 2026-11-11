@@ -220,15 +220,23 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
     }
 
     async fn exists(&mut self, path: Path) -> Result<bool, FileSystemError> {
-        let fs = self.fs.as_ref().ok_or(FileSystemError::Exist)?.borrow_mut();
-        let path = to_lfs_path(&path).ok_or(FileSystemError::Exist)?;
+        let fs = self
+            .fs
+            .as_ref()
+            .ok_or(FileSystemError::Exists)?
+            .borrow_mut();
+        let path = to_lfs_path(&path).ok_or(FileSystemError::Exists)?;
 
         Ok(fs.exists(path))
     }
 
     async fn metadata(&mut self, path: Path) -> Result<FileSystemMetaData, FileSystemError> {
-        let fs = self.fs.as_ref().ok_or(FileSystemError::Exist)?.borrow_mut();
-        let path = to_lfs_path(&path).ok_or(FileSystemError::Exist)?;
+        let fs = self
+            .fs
+            .as_ref()
+            .ok_or(FileSystemError::Exists)?
+            .borrow_mut();
+        let path = to_lfs_path(&path).ok_or(FileSystemError::Exists)?;
 
         if !fs.exists(path) {
             return Err(FileSystemError::Metadata);

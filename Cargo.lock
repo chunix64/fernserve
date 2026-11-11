@@ -27,6 +27,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c583acf993cf4245c4acb0a2cc2ab1f9cc097de73411bb6d3647ff6af2b1013d"
 
 [[package]]
+name = "anyhow"
+version = "1.0.104"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+
+[[package]]
 name = "as-slice"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1122,6 +1128,7 @@ dependencies = [
 name = "fernserve"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "critical-section",
  "embassy-executor",
  "embassy-net",
@@ -1147,6 +1154,7 @@ dependencies = [
  "serde_json",
  "smoltcp 0.14.0",
  "static_cell",
+ "thiserror",
  "tinyrlibc",
 ]
 

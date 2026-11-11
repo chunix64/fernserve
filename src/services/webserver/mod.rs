@@ -7,7 +7,6 @@ use crate::configs::{HTTP_BUFFER_SIZE, WEB_SERVER_PORT, WEB_TASK_POOL_SIZE};
 use crate::{services::webserver::handler::WebServerHandler, vfs::VirtualFileSystem};
 
 mod chunks;
-mod errors;
 mod handler;
 mod parser;
 
