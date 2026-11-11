@@ -215,7 +215,7 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
         Ok(littlefs2::fs::Filesystem::total_space(&fs.borrow_mut()))
     }
 
-    async fn exist(&mut self, path: Path) -> Result<bool, FileSystemError> {
+    async fn exists(&mut self, path: Path) -> Result<bool, FileSystemError> {
         let fs = self.fs.as_ref().ok_or(FileSystemError::Exist)?.borrow_mut();
         let path = to_lfs_path(&path).ok_or(FileSystemError::Exist)?;
 

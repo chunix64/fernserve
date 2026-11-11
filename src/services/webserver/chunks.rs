@@ -1,7 +1,7 @@
 use embedded_io_async::Read;
-use picoserve::response::chunked::Chunks;
+use picoserve::response::chunked::{ChunkWriter, Chunks, ChunksWritten};
 
-use crate::configs::HTTP_REQUEST_CHUNK_SIZE;
+use crate::configs::HTTP_BUFFER_SIZE;
 
 pub struct ChunkReader<R> {
     pub reader: R,
@@ -24,9 +24,9 @@ impl<R: Read> Chunks for ChunkReader<R> {
 
     async fn write_chunks<W: picoserve::io::Write>(
         mut self,
-        mut chunk_writer: picoserve::response::chunked::ChunkWriter<W>,
-    ) -> Result<picoserve::response::chunked::ChunksWritten, W::Error> {
-        let mut buffer = [0u8; HTTP_REQUEST_CHUNK_SIZE];
+        mut chunk_writer: ChunkWriter<W>,
+    ) -> Result<ChunksWritten, W::Error> {
+        let mut buffer = [0u8; HTTP_BUFFER_SIZE];
         loop {
             match self.reader.read(&mut buffer).await {
                 Ok(0) => break,

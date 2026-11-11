@@ -6,7 +6,7 @@ use esp_radio::wifi::{
 };
 use log::{error, info, warn};
 
-use crate::models::configs::WifiConfig;
+use crate::{configs::WIFI_RETRY_INTERVAL, models::configs::WifiConfig};
 
 #[embassy_executor::task]
 pub async fn wifi_task(wifi_controller: WifiController<'static>, wifi_config: WifiConfig) {
@@ -17,8 +17,6 @@ async fn wifi_handle_connection(
     mut wifi_controller: WifiController<'static>,
     wifi_config: WifiConfig,
 ) {
-    let interval = 2000;
-
     let ssid = match Ssid::try_from(wifi_config.ssid.as_str()) {
         Ok(ssid) => ssid,
         Err(error) => {
@@ -55,7 +53,7 @@ async fn wifi_handle_connection(
     loop {
         if wifi_controller.is_connected() {
             let _ = wifi_controller.wait_for_disconnect_async().await;
-            Delay.delay_ms(interval).await;
+            Delay.delay_ms(WIFI_RETRY_INTERVAL as u32).await;
         } else {
             match wifi_controller.connect_async().await {
                 Ok(_) => {
@@ -66,7 +64,7 @@ async fn wifi_handle_connection(
                         "[WIFI] WiFi cannot connect to {}, retry! Error: {:?}",
                         wifi_config.ssid, error
                     );
-                    Delay.delay_ms(interval).await;
+                    Delay.delay_ms(WIFI_RETRY_INTERVAL as u32).await;
                 }
             }
         }

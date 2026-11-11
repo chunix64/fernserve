@@ -1,14 +1,12 @@
-use core::fmt::Display;
-
 use embassy_executor::Spawner;
 use picoserve::routing::ServicePathRouter;
 use picoserve::{AppBuilder, AppRouter, make_static};
-use serde::Serialize;
 
 use crate::configs::{HTTP_BUFFER_SIZE, WEB_SERVER_PORT, WEB_TASK_POOL_SIZE};
 use crate::{services::webserver::handler::WebServerHandler, vfs::VirtualFileSystem};
 
 mod chunks;
+mod errors;
 mod handler;
 mod parser;
 
@@ -71,23 +69,4 @@ async fn web_task(
         )
         .await
         .into_never()
-}
-
-#[derive(Serialize, Debug)]
-pub enum WebServerError {
-    Parser,
-    Path,
-    ParseJsonKey,
-    ParseParamKey,
-}
-
-impl Display for WebServerError {
-    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            WebServerError::Parser => formatter.write_str("Parser"),
-            WebServerError::Path => formatter.write_str("Path"),
-            WebServerError::ParseJsonKey => formatter.write_str("ParseJsonKey"),
-            WebServerError::ParseParamKey => formatter.write_str("ParseParamKey"),
-        }
-    }
 }

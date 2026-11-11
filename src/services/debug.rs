@@ -2,6 +2,8 @@ use embassy_time::Delay;
 use embedded_hal_async::delay::DelayNs;
 use log::debug;
 
+use crate::configs::DEBUG_SERVICE_INTERVAL;
+
 #[embassy_executor::task]
 pub async fn debug_service() {
     loop {
@@ -16,6 +18,6 @@ pub async fn debug_service() {
             used as f32 / (free + used) as f32 * 100.0
         );
 
-        Delay.delay_ms(5000).await;
+        Delay.delay_ms(DEBUG_SERVICE_INTERVAL as u32).await;
     }
 }

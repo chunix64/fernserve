@@ -40,10 +40,10 @@ impl VirtualFileSystem {
         }
     }
 
-    pub async fn exist(&mut self, path: Path) -> Result<bool, VirtualFileSystemError> {
+    pub async fn exists(&mut self, path: Path) -> Result<bool, VirtualFileSystemError> {
         match self.get_filesystem(path).await {
             Ok((fs, fs_path, _)) => fs
-                .exist(fs_path)
+                .exists(fs_path)
                 .await
                 .map_err(|_| VirtualFileSystemError::Exist),
             Err(error) => Err(error),
@@ -90,6 +90,11 @@ impl VirtualFileSystem {
         match self.get_filesystem(path).await {
             Ok((fs, fs_path, _)) => fs
                 .read_dir(fs_path)
+                .await
+                .map_err(|_| VirtualFileSystemError::ReadDir),
+            Err(VirtualFileSystemError::Dev) => self
+                .root_filesystem
+                .read_dir(Path::new("/dev").map_err(|_| VirtualFileSystemError::ReadDir)?)
                 .await
                 .map_err(|_| VirtualFileSystemError::ReadDir),
             Err(error) => Err(error),
@@ -141,24 +146,18 @@ impl VirtualFileSystem {
         src_path: Path,
         dest_path: Path,
     ) -> Result<(), VirtualFileSystemError> {
-        match self.get_filesystem(src_path).await {
-            Ok((_src_fs, fs_src_path, src_mount_index)) => {
-                match self.get_filesystem(dest_path).await {
-                    Ok((dest_fs, fs_dest_path, dest_mount_index)) => {
-                        if src_mount_index == dest_mount_index {
-                            return dest_fs
-                                .rename(fs_src_path, fs_dest_path)
-                                .await
-                                .map_err(|_| VirtualFileSystemError::Rename);
-                        }
+        let (_src_fs, fs_src_path, src_mount_index) = self.get_filesystem(src_path).await?;
+        let (dest_fs, fs_dest_path, dest_mount_index) = self.get_filesystem(dest_path).await?;
 
-                        Err(VirtualFileSystemError::NotImplementedYet)
-                    }
-                    Err(error) => Err(error),
-                }
-            }
-            Err(error) => Err(error),
+        if src_mount_index == dest_mount_index {
+            return dest_fs
+                .rename(fs_src_path, fs_dest_path)
+                .await
+                .map_err(|_| VirtualFileSystemError::Rename);
         }
+
+        // TODO: Moving file between filesystems
+        Err(VirtualFileSystemError::NotImplementedYet)
     }
 }
 

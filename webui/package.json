@@ -9,16 +9,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "preact": "^11.0.2",
+    "preact": "^11.2.0",
     "preact-iso": "^2.12.2",
-    "sass": "^1.107.1",
+    "sass": "^1.108.1",
     "vite-plugin-compression2": "^2.5.4"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",
     "@types/node": "^24.19.2",
     "typescript": "~7.0.2",
-    "vite": "^8.3.5",
+    "vite": "^8.3.7",
     "vite-plugin-singlefile": "^2.3.4"
   }
 }

@@ -102,7 +102,7 @@ impl FileSystem for AnyFs {
         async fn format() -> Result<(), FileSystemError>;
         async fn mount() -> Result<(), FileSystemError>;
         async fn is_mountable() -> Result<bool, FileSystemError>;
-        async fn exist(path: Path) -> Result<bool, FileSystemError>;
+        async fn exists(path: Path) -> Result<bool, FileSystemError>;
         async fn metadata(path: Path) -> Result<FileSystemMetaData, FileSystemError>;
         async fn available_space() -> Result<usize, FileSystemError>;
         async fn total_space() -> Result<usize, FileSystemError>;

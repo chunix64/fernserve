@@ -1,7 +1,7 @@
-use core::fmt;
-
 use alloc::vec;
 use alloc::vec::Vec;
+use core::fmt;
+
 use serde::{Serialize, Serializer};
 
 use crate::configs::PATH_MAX_LENGTH;

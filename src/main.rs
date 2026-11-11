@@ -47,6 +47,7 @@ use crate::vfs::VirtualFileSystem;
 #[allow(clippy::large_stack_frames)]
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
+    // --- Board ---
     let board = Board::init();
 
     // --- WiFi & Network ---
@@ -73,7 +74,11 @@ async fn main(spawner: Spawner) -> ! {
         LittleFsFileSystem::new(littlefs_storage).expect("Failed to create LittleFs filesystem"),
     );
 
-    if !root_filesystem.is_mountable().await.unwrap_or(false) {
+    if !root_filesystem
+        .is_mountable()
+        .await
+        .expect("Failed to get mountable state of root_filesystem")
+    {
         log::debug!("[DEBUG] File is not mountable, try format");
         root_filesystem.format().await.expect("format filesystem");
     }

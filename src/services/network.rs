@@ -1,7 +1,8 @@
-use crate::configs::NET_STACK_RESOURCES_SIZE;
 use embassy_net::StackResources;
 use esp_hal::rng::Rng;
 use static_cell::StaticCell;
+
+use crate::configs::NET_STACK_RESOURCES_SIZE;
 
 static NET_STACK_RESOURCES: StaticCell<StackResources<NET_STACK_RESOURCES_SIZE>> =
     StaticCell::new();
@@ -36,8 +37,12 @@ pub async fn net_runner_service(
 
 #[embassy_executor::task]
 pub async fn net_monitor_service(network_stack: embassy_net::Stack<'static>) {
-    network_stack.wait_config_up().await;
-    if let Some(config) = network_stack.config_v4() {
-        log::info!("[NET] IP: {}", config.address);
+    loop {
+        network_stack.wait_config_up().await;
+        if let Some(config) = network_stack.config_v4() {
+            log::info!("[NET] IP: {}", config.address);
+        }
+        network_stack.wait_config_down().await;
+        log::warn!("[NET] Link/config lost");
     }
 }

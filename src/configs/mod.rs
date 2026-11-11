@@ -10,7 +10,6 @@ pub const ESP_LITTLEFS_PARTITION_SIZE: usize = 0xF0000;
 pub const WEB_SERVER_PORT: usize = 80;
 pub const WEB_TASK_POOL_SIZE: usize = 4;
 pub const HTTP_BUFFER_SIZE: usize = 2048;
-pub const HTTP_REQUEST_CHUNK_SIZE: usize = 2048;
 
 // Net Service
 pub const SOCKET_SIZE: usize = 4;
@@ -18,3 +17,7 @@ pub const NET_STACK_RESOURCES_SIZE: usize = WEB_TASK_POOL_SIZE + SOCKET_SIZE;
 
 // Path
 pub const PATH_MAX_LENGTH: usize = 256;
+
+// Intervals
+pub const WIFI_RETRY_INTERVAL: usize = 2000;
+pub const DEBUG_SERVICE_INTERVAL: usize = 5000;

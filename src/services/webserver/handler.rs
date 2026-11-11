@@ -9,9 +9,8 @@ use picoserve::response::chunked::ChunkedResponse;
 use picoserve::response::{Response, StatusCode};
 use picoserve::routing::PathRouterService;
 
-use crate::configs::HTTP_REQUEST_CHUNK_SIZE;
-use crate::services::webserver::WebServerError;
 use crate::services::webserver::chunks::ChunkReader;
+use crate::services::webserver::errors::WebServerError;
 use crate::services::webserver::parser::WebServerParser;
 use crate::vfs::VirtualFileSystem;
 
@@ -87,7 +86,7 @@ impl WebServerHandler {
         match request.parts.path().encoded() {
             // APIs
             "/api/v1/status" => Self::status(request, response_writer).await,
-            "/api/v1/vfs/exist" => self.vfs_exist(request, response_writer).await,
+            "/api/v1/vfs/exists" => self.vfs_exists(request, response_writer).await,
             "/api/v1/vfs/read-dir" => self.vfs_read_dir(request, response_writer).await,
             "/api/v1/vfs/create-dir" => self.vfs_create_dir(request, response_writer).await,
             "/api/v1/vfs/remove" => self.vfs_remove(request, response_writer).await,
@@ -118,7 +117,7 @@ impl WebServerHandler {
         match request.parts.path().encoded() {
             // APIs
             "/api/v1/status" => Self::status(request, response_writer).await,
-            "/api/v1/vfs/exist" => self.vfs_exist(request, response_writer).await,
+            "/api/v1/vfs/exists" => self.vfs_exists(request, response_writer).await,
             "/api/v1/vfs/read-dir" => self.vfs_read_dir(request, response_writer).await,
             "/api/v1/vfs/create-dir" => self.vfs_create_dir(request, response_writer).await,
             "/api/v1/vfs/remove" => self.vfs_remove(request, response_writer).await,
@@ -167,7 +166,7 @@ impl WebServerHandler {
         request: picoserve::request::Request<'_, R>,
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
-        Self::helper_json_response(request, response_writer, r###"{"error": "not_found"}"###).await
+        Self::helper_error_response(request, response_writer, "Not Found", 404).await
     }
 
     async fn get_default_routing<
@@ -196,7 +195,7 @@ impl WebServerHandler {
         )
     }
 
-    async fn vfs_exist<
+    async fn vfs_exists<
         R: embedded_io_async::Read,
         W: picoserve::response::ResponseWriter<Error = R::Error>,
     >(
@@ -205,7 +204,7 @@ impl WebServerHandler {
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
         let result = match Self::helper_parse_key(&mut request, "path").await {
-            Ok(path) => WebServerParser::vfs_exist(&mut *self.vfs.lock().await, &path).await,
+            Ok(path) => WebServerParser::vfs_exists(&mut *self.vfs.lock().await, &path).await,
             Err(error) => Err(error),
         };
 
@@ -398,12 +397,12 @@ impl WebServerHandler {
 
         let mut vfs = self.vfs.lock().await;
 
-        if let Ok(true) = vfs.exist(path).await {
+        if let Ok(true) = vfs.exists(path).await {
             let Ok(file) = vfs.open(path).await else {
                 return Self::helper_webserver_error_response(
                     request,
                     response_writer,
-                    WebServerError::Path,
+                    WebServerError::VfsOpen,
                 )
                 .await;
             };
