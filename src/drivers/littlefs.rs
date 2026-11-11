@@ -114,6 +114,10 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::File for Litt
         let file = unsafe { ManuallyDrop::take(&mut this.file) };
         unsafe { file.close().map_err(|_| FileError::Close) }
     }
+
+    async fn truncate(&mut self, new_len: usize) -> Result<(), FileError> {
+        self.file.set_len(new_len).map_err(|_| FileError::Truncate)
+    }
 }
 
 impl<'a, S: littlefs2::driver::Storage> embedded_io_async::ErrorType for LittleFsFile<'a, S> {

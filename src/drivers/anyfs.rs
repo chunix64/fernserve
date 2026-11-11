@@ -46,6 +46,12 @@ macro_rules! impl_any_file {
                     $(Self::$variant(file) => file.close().await,)+
                 }
             }
+
+            async fn truncate(&mut self, new_len: usize) -> Result<(), FileError> {
+                match self {
+                    $(Self::$variant(file) => file.truncate(new_len).await,)+
+                }
+            }
         }
 
         impl embedded_io_async::Read for AnyFile {

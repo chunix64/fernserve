@@ -14,15 +14,11 @@ export default function FileBrowser() {
 
   // FileBrowser
   useEffect(() => {
-    let cancelled = false;
     FernClient.readDir(dir)
       .then((nodes) => {
-        if (!cancelled) setFileSystemNodes(nodes);
+        setFileSystemNodes(nodes);
       })
       .catch(console.error);
-    return () => {
-      cancelled = true;
-    };
   }, [dir]);
 
   return (

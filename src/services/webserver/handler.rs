@@ -123,6 +123,9 @@ impl WebServerHandler {
             "/api/v1/vfs/remove" => self.vfs_remove(request, response_writer).await,
             "/api/v1/vfs/remove-all" => self.vfs_remove_all(request, response_writer).await,
             "/api/v1/vfs/rename" => self.vfs_rename(request, response_writer).await,
+            "/api/v1/vfs/upload-file-raw" => {
+                self.vfs_upload_file_raw(request, response_writer).await
+            }
             "/api/v1/vfs/upload-file" => self.vfs_upload_file(request, response_writer).await,
             "/api/v1/vfs/download-file" => self.vfs_download_file(request, response_writer).await,
             "/api/v1/vfs/total-space" => self.vfs_total_space(request, response_writer).await,
@@ -347,7 +350,7 @@ impl WebServerHandler {
         Self::helper_result_response(request, response_writer, result).await
     }
 
-    async fn vfs_upload_file<
+    async fn vfs_upload_file_raw<
         R: embedded_io_async::Read,
         W: picoserve::response::ResponseWriter<Error = R::Error>,
     >(
@@ -357,7 +360,7 @@ impl WebServerHandler {
     ) -> Result<ResponseSent, W::Error> {
         let result = match Self::helper_parse_param_key(&mut request, "path").await {
             Ok(path) => {
-                WebServerParser::vfs_upload_file(
+                WebServerParser::vfs_upload_file_raw(
                     &mut *self.vfs.lock().await,
                     &path,
                     request.body_connection.body().reader(),
@@ -368,6 +371,44 @@ impl WebServerHandler {
         };
 
         Self::helper_result_response(request, response_writer, result).await
+    }
+
+    async fn vfs_upload_file<
+        R: embedded_io_async::Read,
+        W: picoserve::response::ResponseWriter<Error = R::Error>,
+    >(
+        &self,
+        mut request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error> {
+        let result = async {
+            let path = Self::helper_parse_param_key(&mut request, "path").await?;
+            let chunk_index: usize = Self::helper_parse_param_key(&mut request, "chunk_index")
+                .await?
+                .parse()
+                .map_err(|_| WebServerError::ParseParamKey)?;
+            let total_chunks: usize = Self::helper_parse_param_key(&mut request, "total_chunks")
+                .await?
+                .parse()
+                .map_err(|_| WebServerError::ParseParamKey)?;
+
+            WebServerParser::vfs_upload_file_chunk(
+                &mut *self.vfs.lock().await,
+                &path,
+                chunk_index,
+                total_chunks,
+                request.body_connection.body().reader(),
+            )
+            .await
+        }
+        .await;
+
+        match result {
+            Ok(json) => Self::helper_json_response(request, response_writer, &json).await,
+            Err(error) => {
+                Self::helper_webserver_error_response(request, response_writer, error).await
+            }
+        }
     }
 
     async fn vfs_download_file<
@@ -417,7 +458,7 @@ impl WebServerHandler {
                     connection,
                     chunked_response
                         .into_response()
-                        .with_header("Content-Disposition", "attachment"),
+                        .with_header("Content-Disposition", "inline"),
                 )
                 .await;
         }
@@ -494,7 +535,7 @@ impl WebServerHandler {
         request: picoserve::request::Request<'_, R>,
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
-        Self::helper_json_response(request, response_writer, r###"{"status": "ok"}"###).await
+        Self::helper_json_response(request, response_writer, r###"{"status": 200}"###).await
     }
 
     async fn helper_webserver_error_response<

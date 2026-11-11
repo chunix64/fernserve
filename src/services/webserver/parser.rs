@@ -1,10 +1,11 @@
 use alloc::string::{String, ToString};
-use embedded_io_async::{Read, Write};
+
+use embedded_io_async::{Read, Seek, SeekFrom, Write};
 use picoserve::request::RequestBodyReader;
 use serde_json::{Value, json};
 
 use crate::{
-    configs::HTTP_BUFFER_SIZE,
+    configs::{HTTP_BUFFER_SIZE, UPLOAD_CHUNK_SIZE},
     models::{filesystem::File, path::Path},
     services::webserver::errors::WebServerError,
     vfs::VirtualFileSystem,
@@ -116,7 +117,7 @@ impl WebServerParser {
             .map_err(|_| WebServerError::VfsRename)
     }
 
-    pub async fn vfs_upload_file<R: embedded_io_async::Read>(
+    pub async fn vfs_upload_file_raw<R: embedded_io_async::Read>(
         vfs: &mut VirtualFileSystem,
         path: &str,
         mut reader: RequestBodyReader<'_, R>,
@@ -146,6 +147,83 @@ impl WebServerParser {
         }
 
         file.close().await.map_err(|_| WebServerError::VfsClose)
+    }
+
+    pub async fn vfs_upload_file_chunk<R: embedded_io_async::Read>(
+        vfs: &mut VirtualFileSystem,
+        path: &str,
+        chunk_index: usize,
+        total_chunks: usize,
+        mut reader: RequestBodyReader<'_, R>,
+    ) -> Result<String, WebServerError> {
+        if total_chunks == 0 || chunk_index >= total_chunks {
+            return Err(WebServerError::ParseParamKey);
+        }
+
+        let path = Path::new(path).map_err(|_| WebServerError::Path)?;
+        let offset = chunk_index * UPLOAD_CHUNK_SIZE;
+
+        if chunk_index == 0 {
+            if let Ok(true) = vfs.exists(path).await {
+                vfs.remove(path)
+                    .await
+                    .map_err(|_| WebServerError::VfsRemove)?;
+            }
+            vfs.create_file(path)
+                .await
+                .map_err(|_| WebServerError::VfsCreateFile)?;
+        } else if let Ok(false) = vfs.exists(path).await {
+            return Err(WebServerError::ParseParamKey); // chunk 0 never arrived
+        }
+
+        let mut file = vfs.open(path).await.map_err(|_| WebServerError::VfsOpen)?;
+
+        // A chunk may only start at or before the current end of file
+        if chunk_index > 0
+            && vfs
+                .metadata(path)
+                .await
+                .map_err(|_| WebServerError::VfsMetadata)?
+                .len
+                < offset
+        {
+            return Err(WebServerError::ParseParamKey); // gap: missing chunk
+        }
+
+        file.seek(SeekFrom::Start(offset as u64))
+            .await
+            .map_err(|_| WebServerError::VfsSeek)?;
+
+        let mut buffer = [0u8; HTTP_BUFFER_SIZE];
+        let mut written_total = 0;
+
+        loop {
+            let n = reader
+                .read(&mut buffer)
+                .await
+                .map_err(|_| WebServerError::Reader)?;
+            if n == 0 {
+                break;
+            }
+            file.write_all(&buffer[..n])
+                .await
+                .map_err(|_| WebServerError::VfsWriteAll)?;
+            written_total += n;
+        }
+
+        if chunk_index + 1 == total_chunks {
+            file.truncate(offset + written_total)
+                .await
+                .map_err(|_| WebServerError::VfsTruncate)?;
+        }
+
+        file.close().await.map_err(|_| WebServerError::VfsClose)?;
+
+        Ok(Self::parse_json(
+            200,
+            "chunk_index",
+            &chunk_index.to_string(),
+        ))
     }
 }
 

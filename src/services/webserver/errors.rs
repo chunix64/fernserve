@@ -19,6 +19,9 @@ pub enum WebServerError {
     VfsRemoveAll,
     VfsRename,
     VfsWriteAll,
+    VfsMetadata,
+    VfsSeek,
+    VfsTruncate,
 }
 
 macro_rules! impl_display {

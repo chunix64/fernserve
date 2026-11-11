@@ -14,6 +14,7 @@ pub trait File:
     + embedded_io_async::Seek
 {
     async fn close(self) -> Result<(), FileError>;
+    async fn truncate(&mut self, new_len: usize) -> Result<(), FileError>;
 }
 
 pub trait FileSystem {

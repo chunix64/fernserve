@@ -1,6 +1,7 @@
 use embassy_executor::Spawner;
+use embassy_time::Duration;
 use picoserve::routing::ServicePathRouter;
-use picoserve::{AppBuilder, AppRouter, make_static};
+use picoserve::{AppBuilder, AppRouter, Timeouts, make_static};
 
 use crate::configs::{HTTP_BUFFER_SIZE, WEB_SERVER_PORT, WEB_TASK_POOL_SIZE};
 use crate::{services::webserver::handler::WebServerHandler, vfs::VirtualFileSystem};
@@ -10,8 +11,12 @@ mod errors;
 mod handler;
 mod parser;
 
-static WEBSERVER_CONFIG: picoserve::Config =
-    picoserve::Config::const_default().keep_connection_alive();
+static WEBSERVER_CONFIG: picoserve::Config = picoserve::Config::new(Timeouts {
+    start_read_request: Duration::from_secs(5),
+    persistent_start_read_request: Duration::from_secs(5),
+    read_request: Duration::from_secs(30),
+    write: Duration::from_secs(30),
+});
 
 #[embassy_executor::task]
 pub async fn webserver_service(

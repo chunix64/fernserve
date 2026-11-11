@@ -46,6 +46,7 @@ pub enum FileError {
     Flush,
     Write,
     Seek,
+    Truncate,
 }
 
 #[non_exhaustive]
@@ -63,6 +64,7 @@ impl fmt::Display for FileError {
             FileError::Flush => formatter.write_str("Flush"),
             FileError::Write => formatter.write_str("Write"),
             FileError::Seek => formatter.write_str("Seek"),
+            FileError::Truncate => formatter.write_str("Truncate"),
         }
     }
 }
@@ -78,6 +80,7 @@ impl embedded_io::Error for FileError {
             FileError::Flush => ErrorKind::Other,
             FileError::Write => ErrorKind::Other,
             FileError::Seek => ErrorKind::Other,
+            FileError::Truncate => ErrorKind::Other,
         }
     }
 }
