@@ -35,7 +35,11 @@ use crate::hardwares::board::Board;
 use crate::hardwares::radio::wifi::wifi_task;
 use crate::models::filesystem::FileSystem;
 use crate::services::debug::debug_service;
-use crate::services::network::{init_network_stack, net_monitor_service, net_runner_service};
+use crate::services::dhcp::dhcp_server_service;
+use crate::services::network::{
+    init_network_stack_access_point, init_network_stack_station, net_monitor_service,
+    net_runner_service,
+};
 use crate::services::webserver::webserver_service;
 use crate::vfs::VirtualFileSystem;
 
@@ -52,7 +56,10 @@ async fn main(spawner: Spawner) -> ! {
         esp_radio::wifi::ControllerConfig::default(),
     )
     .expect("Failed to create WifiController");
-    let (network_stack, network_runner) = init_network_stack(esp_radio::wifi::Interface::station());
+    let (network_stack_station, network_runner_station) =
+        init_network_stack_station(esp_radio::wifi::Interface::station());
+    let (network_stack_access_point, network_runner_access_point) =
+        init_network_stack_access_point(esp_radio::wifi::Interface::access_point());
 
     // --- VFS --
     let flash = esp_storage::FlashStorage::new(board.app_peripherals.flash);
@@ -83,10 +90,23 @@ async fn main(spawner: Spawner) -> ! {
     // --- Spawn hardware Tasks ---
     spawner.spawn(wifi_task(wifi_controller).unwrap());
 
-    // --- Spawn service Tasks ---
-    spawner.spawn(net_runner_service(network_runner).unwrap());
-    spawner.spawn(net_monitor_service(network_stack).unwrap());
-    spawner.spawn(webserver_service(spawner, network_stack, vfs).unwrap());
+    // --- Spawn network service Tasks ---
+    spawner.spawn(net_runner_service(network_runner_station).unwrap());
+    spawner.spawn(net_runner_service(network_runner_access_point).unwrap());
+    spawner.spawn(net_monitor_service(network_stack_station, "Station").unwrap());
+    spawner.spawn(net_monitor_service(network_stack_access_point, "Access Point").unwrap());
+    spawner.spawn(dhcp_server_service(network_stack_access_point).unwrap());
+
+    // --- Spawn other service Tasks ---
+    spawner.spawn(
+        webserver_service(
+            spawner,
+            network_stack_station,
+            network_stack_access_point,
+            vfs,
+        )
+        .unwrap(),
+    );
     spawner.spawn(debug_service().unwrap());
 
     loop {

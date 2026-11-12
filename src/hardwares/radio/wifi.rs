@@ -1,4 +1,3 @@
-use anyhow::Result;
 use embassy_futures::select::{Either, select};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embassy_time::Delay;
@@ -9,7 +8,7 @@ use esp_radio::wifi::{
     scan::ScanConfig,
     sta::StationConfig,
 };
-use log::{error, info, warn};
+use log::{info, warn};
 
 use crate::{
     configs::{WIFI_RETRY_INTERVAL, WIFI_SCAN_MAX_LENGTH},
@@ -18,11 +17,25 @@ use crate::{
 
 #[embassy_executor::task]
 pub async fn wifi_task(wifi_controller: WifiController<'static>) {
-    let wifi_runner = WifiRunner::new(
+    let mut wifi_runner = WifiRunner::new(
         wifi_controller,
-        WifiConfig::<Station>::default(),
-        WifiConfig::<AccessPoint>::default(),
+        StationConfig::default(),
+        AccessPointConfig::default(),
     );
+
+    let default_wifi_station_config = WifiConfig::<Station>::default();
+    let default_wifi_ap_config = WifiConfig::<AccessPoint>::default();
+
+    wifi_runner.set_station_config(
+        &default_wifi_station_config.ssid,
+        &default_wifi_station_config.password,
+    );
+
+    wifi_runner.set_ap_config(
+        &default_wifi_ap_config.ssid,
+        &default_wifi_ap_config.password,
+    );
+
     wifi_runner.run().await;
 }
 
@@ -50,15 +63,15 @@ pub static WIFI_COMMAND_REPLY_CHANNEL: WifiCommandReplyChannel = Channel::new();
 // TODO: store esp_radio Configs instead WifiConfig
 struct WifiRunner {
     wifi_controller: WifiController<'static>,
-    station_config: WifiConfig<Station>,
-    ap_config: WifiConfig<AccessPoint>,
+    station_config: StationConfig,
+    ap_config: AccessPointConfig,
 }
 
 impl WifiRunner {
     fn new(
         wifi_controller: WifiController<'static>,
-        station_config: WifiConfig<Station>,
-        ap_config: WifiConfig<AccessPoint>,
+        station_config: StationConfig,
+        ap_config: AccessPointConfig,
     ) -> Self {
         Self {
             wifi_controller,
@@ -67,47 +80,69 @@ impl WifiRunner {
         }
     }
 
-    fn get_station_config(ssid: &str, password: &str) -> Result<StationConfig> {
-        let ssid = Ssid::try_from(ssid)?;
-        let password = Password::try_from(password)?;
-        let authentication = AuthenticationMethodConfig::Wpa2Personal(password);
+    fn parse_credentials(
+        role: &str,
+        ssid: &str,
+        password: &str,
+        need_password: bool,
+    ) -> Option<(Ssid, Option<Password>)> {
+        let ssid = Ssid::try_from(ssid)
+            .inspect_err(|error| {
+                log::warn!(
+                    "[WIFI] Get {} ssid failed, keep the old config: {:?}",
+                    role,
+                    error
+                )
+            })
+            .ok()?;
 
-        Ok(StationConfig::default()
-            .with_ssid(ssid)
-            .with_authentication(authentication))
+        if !need_password {
+            return Some((ssid, None));
+        }
+
+        let password = Password::try_from(password)
+            .inspect_err(|error| {
+                log::warn!(
+                    "[WIFI] Get {} password failed, keep the old config: {:?}",
+                    role,
+                    error
+                )
+            })
+            .ok()?;
+
+        Some((ssid, Some(password)))
     }
 
-    fn get_ap_config(ssid: &str, password: &str) -> Result<AccessPointConfig> {
-        let ssid = Ssid::try_from(ssid)?;
-        let password = Password::try_from(password)?;
+    fn set_station_config(&mut self, ssid: &str, password: &str) {
+        let Some((ssid, Some(password))) = Self::parse_credentials("station", ssid, password, true)
+        else {
+            return;
+        };
+
         let authentication = AuthenticationMethodConfig::Wpa2Personal(password);
 
-        Ok(AccessPointConfig::default()
+        self.station_config = StationConfig::default()
             .with_ssid(ssid)
-            .with_authentication(authentication))
+            .with_authentication(authentication);
+    }
+
+    fn set_ap_config(&mut self, ssid: &str, password: &str) {
+        let Some((ssid, Some(password))) =
+            Self::parse_credentials("Access Point", ssid, password, true)
+        else {
+            return;
+        };
+
+        let authentication = AuthenticationMethodConfig::Wpa2Personal(password);
+
+        self.ap_config = AccessPointConfig::default()
+            .with_ssid(ssid)
+            .with_authentication(authentication);
     }
 
     fn apply(&mut self) {
-        let station_config = match Self::get_station_config(
-            &self.station_config.ssid,
-            &self.station_config.password,
-        ) {
-            Ok(station_config) => station_config,
-            Err(error) => {
-                error!("[WIFI] Station config is invalid: {:?}", error);
-                StationConfig::default() // TODO: use the old config instead placeholder configs
-            }
-        };
-
-        let ap_config = match Self::get_ap_config(&self.ap_config.ssid, &self.ap_config.password) {
-            Ok(ap_config) => ap_config,
-            Err(error) => {
-                error!("[WIFI] Ap config is invalid: {:?}", error);
-                AccessPointConfig::default()
-            }
-        };
-
-        let wifi_config = Config::AccessPointStation(station_config, ap_config);
+        let wifi_config =
+            Config::AccessPointStation(self.station_config.clone(), self.ap_config.clone());
 
         if self.wifi_controller.set_config(&wifi_config).is_err() {
             warn!("[WIFI] Failed to set WiFi config!");
@@ -154,13 +189,17 @@ impl WifiRunner {
                 .await
                 {
                     Either::First(Ok(_)) => {
-                        info!("[WIFI] WiFi connected to {}", self.station_config.ssid);
+                        info!(
+                            "[WIFI] WiFi connected to {}",
+                            self.station_config.ssid().as_str()
+                        );
                         None
                     }
                     Either::First(Err(error)) => {
                         warn!(
                             "[WIFI] WiFi cannot connect to {}, retry! Error: {:?}",
-                            self.station_config.ssid, error
+                            self.station_config.ssid().as_str(),
+                            error
                         );
                         Delay.delay_ms(WIFI_RETRY_INTERVAL as u32).await;
                         None
@@ -172,11 +211,11 @@ impl WifiRunner {
             if let Some(command) = command {
                 match command {
                     WifiCommand::SetStation(station_config) => {
-                        self.station_config = station_config;
+                        self.set_station_config(&station_config.ssid, &station_config.password);
                         self.reconnect_and_apply().await
                     }
                     WifiCommand::SetAp(ap_config) => {
-                        self.ap_config = ap_config;
+                        self.set_ap_config(&ap_config.ssid, &ap_config.password);
                         self.reconnect_and_apply().await
                     }
                     WifiCommand::Scan => {

@@ -44,6 +44,7 @@ smoltcp = { version = "0.14.0", default-features = false, features = [
     "socket-tcp",
     "socket-udp",
 ] }
+leasehund = "0.8.0"
 
 embedded-io = { version = "0.7.1", features = ["alloc"] }
 embedded-io-async = "0.7.0"

@@ -20,14 +20,19 @@ static WEBSERVER_CONFIG: picoserve::Config = picoserve::Config::new(Timeouts {
 #[embassy_executor::task]
 pub async fn webserver_service(
     spawner: Spawner,
-    network_stack: embassy_net::Stack<'static>,
+    network_stack_station: embassy_net::Stack<'static>,
+    network_stack_access_point: embassy_net::Stack<'static>,
     vfs: VirtualFileSystem,
 ) {
     let app_props = AppProps::new(vfs);
     let app = make_static!(AppRouter<AppProps>, app_props.build_app());
 
     for task_id in 0..WEB_TASK_POOL_SIZE {
-        spawner.spawn(web_task(task_id, network_stack, app).unwrap());
+        spawner.spawn(web_task(task_id, network_stack_station, app).unwrap());
+    }
+
+    for task_id in WEB_TASK_POOL_SIZE..WEB_TASK_POOL_SIZE * 2 {
+        spawner.spawn(web_task(task_id, network_stack_access_point, app).unwrap());
     }
 }
 
@@ -52,7 +57,7 @@ impl AppBuilder for AppProps {
     }
 }
 
-#[embassy_executor::task(pool_size = WEB_TASK_POOL_SIZE)]
+#[embassy_executor::task(pool_size = WEB_TASK_POOL_SIZE * 2)]
 async fn web_task(
     task_id: usize,
     stack: embassy_net::Stack<'static>,

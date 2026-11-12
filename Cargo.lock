@@ -1148,6 +1148,7 @@ dependencies = [
  "esp-storage",
  "form_urlencoded",
  "heapless 0.9.3",
+ "leasehund",
  "littlefs2",
  "log",
  "picoserve",
@@ -1399,6 +1400,17 @@ name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
+
+[[package]]
+name = "leasehund"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6214218d7107ffa88055734e445141c22f5af756859e29a1a196e6e03edd10b3"
+dependencies = [
+ "embassy-net",
+ "embassy-time",
+ "heapless 0.9.3",
+]
 
 [[package]]
 name = "libc"
