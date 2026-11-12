@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::{
-    drivers::anyfs::AnyFs,
+    drivers::filesystems::anyfs::AnyFs,
     models::{
         common::VirtualFileSystemError,
         filesystem::{FileSystem, FileSystemMetaData, FileSystemNode},

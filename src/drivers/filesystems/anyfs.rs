@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::{
-    drivers::littlefs::{LittleFsFile, LittleFsFileSystem, LittleFsStorage},
+    drivers::filesystems::littlefs::{LittleFsFile, LittleFsFileSystem, LittleFsStorage},
     models::{
         common::{FileError, FileSystemError},
         filesystem::{File, FileSystem, FileSystemMetaData, FileSystemNode},

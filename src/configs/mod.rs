@@ -1,6 +1,9 @@
 // WiFi
 pub const DEFAULT_WIFI_SSID: &str = "YOUR_WIFI_SSID";
 pub const DEFAULT_WIFI_PASSWORD: &str = "YOUR_WIFI_PASSWORD";
+pub const DEFAULT_WIFI_AP_SSID: &str = "Fernserve";
+pub const DEFAULT_WIFI_AP_PASSWORD: &str = "fernfern";
+pub const WIFI_SCAN_MAX_LENGTH: usize = 16;
 
 // Partitioning
 pub const ESP_LITTLEFS_PARTITION_OFFSET: usize = 0x310000;
@@ -10,7 +13,7 @@ pub const ESP_LITTLEFS_PARTITION_SIZE: usize = 0xF0000;
 pub const WEB_SERVER_PORT: usize = 80;
 pub const WEB_TASK_POOL_SIZE: usize = 4;
 pub const HTTP_BUFFER_SIZE: usize = 4096;
-pub const UPLOAD_CHUNK_SIZE: usize = 32 * 1024; //match with clients
+pub const UPLOAD_CHUNK_SIZE: usize = 32 * 1024; //match with the front-end clients
 
 // Net Service
 pub const SOCKET_SIZE: usize = 4;

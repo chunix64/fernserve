@@ -28,15 +28,11 @@ use embassy_executor::Spawner;
 use embassy_time::Delay;
 use embedded_hal_async::delay::DelayNs;
 
-use crate::configs::{
-    DEFAULT_WIFI_PASSWORD, DEFAULT_WIFI_SSID, ESP_LITTLEFS_PARTITION_OFFSET,
-    ESP_LITTLEFS_PARTITION_SIZE,
-};
-use crate::drivers::anyfs::AnyFs;
-use crate::drivers::littlefs::{LittleFsFileSystem, LittleFsStorage};
+use crate::configs::{ESP_LITTLEFS_PARTITION_OFFSET, ESP_LITTLEFS_PARTITION_SIZE};
+use crate::drivers::filesystems::anyfs::AnyFs;
+use crate::drivers::filesystems::littlefs::{LittleFsFileSystem, LittleFsStorage};
 use crate::hardwares::board::Board;
 use crate::hardwares::radio::wifi::wifi_task;
-use crate::models::configs::WifiConfig;
 use crate::models::filesystem::FileSystem;
 use crate::services::debug::debug_service;
 use crate::services::network::{init_network_stack, net_monitor_service, net_runner_service};
@@ -54,15 +50,9 @@ async fn main(spawner: Spawner) -> ! {
     let wifi_controller = esp_radio::wifi::WifiController::new(
         board.app_peripherals.wifi,
         esp_radio::wifi::ControllerConfig::default(),
-    );
-
+    )
+    .expect("Failed to create WifiController");
     let (network_stack, network_runner) = init_network_stack(esp_radio::wifi::Interface::station());
-
-    // --- Configs ---
-    let wifi_config = WifiConfig {
-        ssid: heapless::String::try_from(DEFAULT_WIFI_SSID).unwrap(),
-        password: heapless::String::try_from(DEFAULT_WIFI_PASSWORD).unwrap(),
-    };
 
     // --- VFS --
     let flash = esp_storage::FlashStorage::new(board.app_peripherals.flash);
@@ -91,14 +81,7 @@ async fn main(spawner: Spawner) -> ! {
     let vfs = VirtualFileSystem::new(root_filesystem).await;
 
     // --- Spawn hardware Tasks ---
-    match wifi_controller {
-        Ok(wifi_controller) => {
-            spawner.spawn(wifi_task(wifi_controller, wifi_config).unwrap());
-        }
-        Err(error) => {
-            log::warn!("[MAIN] Failed to start wifi task: {}", error);
-        }
-    }
+    spawner.spawn(wifi_task(wifi_controller).unwrap());
 
     // --- Spawn service Tasks ---
     spawner.spawn(net_runner_service(network_runner).unwrap());
