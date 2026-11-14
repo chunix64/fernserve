@@ -39,19 +39,29 @@ export default class FernClient {
     return response.status === 200;
   }
 
-  static async uploadFile(path: string, file: File): Promise<boolean> {
-    const totalChunks = Math.ceil(file.size / UPLOAD_CHUNK_SIZE);
+  static async uploadFile(
+    path: string,
+    file: File,
+    onProgress?: (uploadedBytes: number) => void,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    const totalChunks = Math.max(1, Math.ceil(file.size / UPLOAD_CHUNK_SIZE));
 
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-      const uri =
-        `${API_URI}/vfs/upload-file?path=${path}&chunk_index=${chunkIndex}&total_chunks=${totalChunks}`;
       const start = chunkIndex * UPLOAD_CHUNK_SIZE;
       const end = Math.min(start + UPLOAD_CHUNK_SIZE, file.size);
-      const chunk = file.slice(start, end);
+      const uri = `${API_URI}/vfs/upload-file` +
+        `?path=${encodeURIComponent(path)}` +
+        `&chunk_index=${chunkIndex}&total_chunks=${totalChunks}`;
 
-      const response = await fetchJsonWithChunk(uri, chunk, UPLOAD_TRY_ATTEMPT);
+      await fetchJsonWithChunk(
+        uri,
+        file.slice(start, end),
+        UPLOAD_TRY_ATTEMPT,
+        signal,
+      );
 
-      if (response.status !== 200) return false;
+      onProgress?.(end);
     }
 
     return true;
@@ -75,30 +85,51 @@ async function fetchJson(uri: string) {
   return response.json();
 }
 
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal!.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 async function fetchJsonWithChunk(
   uri: string,
   chunk: Blob,
   tryAttempt: number,
+  signal?: AbortSignal,
   delayMs = 200,
 ) {
-  let response = new Response();
+  let response: Response | undefined;
+  let lastError: unknown;
 
   for (let i = 0; i < tryAttempt; i++) {
-    response = await fetch(uri, {
-      method: "POST",
-      body: chunk,
-    });
+    signal?.throwIfAborted();
 
-    if (response.ok) break;
-
-    if (i < tryAttempt - 1) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    try {
+      const r = await fetch(uri, { method: "POST", body: chunk, signal });
+      if (r.ok) {
+        response = r;
+        break;
+      }
+      lastError = new Error(`fetch ${uri} failed: ${r.status}`);
+    } catch (err) {
+      if (signal?.aborted) throw err; // never retry an abort
+      lastError = err; // network error: retry
     }
+
+    if (i < tryAttempt - 1) await sleep(delayMs, signal);
   }
 
-  if (!response.ok) {
-    throw new Error(`fetch ${uri} failed: ${response.status}`);
-  }
-
+  if (!response) throw lastError;
   return response.json();
 }

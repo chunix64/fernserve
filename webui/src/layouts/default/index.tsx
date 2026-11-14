@@ -10,7 +10,9 @@ export default function DefaultLayout({ children }: ContainerProps) {
   return (
     <>
       <Header />
-      <div class="container">{children}</div>
+      <div class="container">
+        {children}
+      </div>
       <Footer />
     </>
   );
