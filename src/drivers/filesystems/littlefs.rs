@@ -234,9 +234,9 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
         let fs = self
             .fs
             .as_ref()
-            .ok_or(FileSystemError::Exists)?
+            .ok_or(FileSystemError::Metadata)?
             .borrow_mut();
-        let path = to_lfs_path(&path).ok_or(FileSystemError::Exists)?;
+        let path = to_lfs_path(&path).ok_or(FileSystemError::Metadata)?;
 
         if !fs.exists(path) {
             return Err(FileSystemError::Metadata);
@@ -300,8 +300,8 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
     }
 
     async fn create_file(&mut self, path: Path) -> Result<(), FileSystemError> {
-        let fs = self.fs.as_ref().ok_or(FileSystemError::CreateDir)?;
-        let path = to_lfs_path(&path).ok_or(FileSystemError::CreateDir)?;
+        let fs = self.fs.as_ref().ok_or(FileSystemError::CreateFile)?;
+        let path = to_lfs_path(&path).ok_or(FileSystemError::CreateFile)?;
 
         fs.borrow_mut()
             .create_file_and_then(path, |_| Ok(()))
@@ -318,9 +318,9 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
     }
 
     async fn remove_all(&mut self, path: Path) -> Result<(), FileSystemError> {
-        let fs = self.fs.as_ref().ok_or(FileSystemError::Remove)?;
+        let fs = self.fs.as_ref().ok_or(FileSystemError::RemoveAll)?;
         let fs = fs.borrow_mut();
-        let path = to_lfs_path(&path).ok_or(FileSystemError::Remove)?;
+        let path = to_lfs_path(&path).ok_or(FileSystemError::RemoveAll)?;
         let metadata = fs.metadata(path).map_err(|_| FileSystemError::RemoveAll)?;
 
         if metadata.is_file() {
@@ -332,9 +332,9 @@ impl<'a, S: littlefs2::driver::Storage> crate::models::filesystem::FileSystem
     }
 
     async fn rename(&mut self, src_path: Path, dest_path: Path) -> Result<(), FileSystemError> {
-        let fs = self.fs.as_ref().ok_or(FileSystemError::Remove)?;
-        let src_path = to_lfs_path(&src_path).ok_or(FileSystemError::Remove)?;
-        let dest_path = to_lfs_path(&dest_path).ok_or(FileSystemError::Remove)?;
+        let fs = self.fs.as_ref().ok_or(FileSystemError::Rename)?;
+        let src_path = to_lfs_path(&src_path).ok_or(FileSystemError::Rename)?;
+        let dest_path = to_lfs_path(&dest_path).ok_or(FileSystemError::Rename)?;
 
         fs.borrow_mut()
             .rename(src_path, dest_path)

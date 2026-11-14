@@ -11,8 +11,8 @@ pub const ESP_LITTLEFS_PARTITION_SIZE: usize = 0xF0000;
 
 // Web Server
 pub const WEB_SERVER_PORT: usize = 80;
-pub const WEB_TASK_POOL_SIZE: usize = 2;
-pub const HTTP_BUFFER_SIZE: usize = 2048;
+pub const WEB_TASK_POOL_SIZE: usize = 4;
+pub const HTTP_BUFFER_SIZE: usize = 4086;
 pub const UPLOAD_CHUNK_SIZE: usize = 32 * 1024; //match with the front-end clients
 
 // Net Service
