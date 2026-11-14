@@ -21,6 +21,16 @@ pub struct WifiConfig<Mode> {
 pub struct Station;
 pub struct AccessPoint;
 
+impl<Mode> WifiConfig<Mode> {
+    pub fn try_new(ssid: &str, password: &str) -> Option<Self> {
+        Some(Self {
+            ssid: String::try_from(ssid).ok()?,
+            password: String::try_from(password).ok()?,
+            _type: PhantomData,
+        })
+    }
+}
+
 impl Default for WifiConfig<Station> {
     fn default() -> Self {
         Self {

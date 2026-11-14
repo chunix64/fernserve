@@ -98,6 +98,10 @@ impl WebServerHandler {
 
             // Wifi
             "/api/v1/wifi/scan" => Self::wifi_scan(request, response_writer).await,
+            "/api/v1/wifi/set-station" => Self::set_station(request, response_writer).await,
+            "/api/v1/wifi/set-access-point" => {
+                Self::set_access_point(request, response_writer).await
+            }
 
             // Reduce server load
             "/favicon.ico" => Self::not_found(request, response_writer).await,

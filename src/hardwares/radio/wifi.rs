@@ -26,12 +26,12 @@ pub async fn wifi_task(wifi_controller: WifiController<'static>) {
     let default_wifi_station_config = WifiConfig::<Station>::default();
     let default_wifi_ap_config = WifiConfig::<AccessPoint>::default();
 
-    wifi_runner.set_station_config(
+    let _ = wifi_runner.set_station_config(
         &default_wifi_station_config.ssid,
         &default_wifi_station_config.password,
     );
 
-    wifi_runner.set_ap_config(
+    let _ = wifi_runner.set_ap_config(
         &default_wifi_ap_config.ssid,
         &default_wifi_ap_config.password,
     );
@@ -44,20 +44,32 @@ pub type WifiScanResult = heapless::Vec<AccessPointInfo, WIFI_SCAN_MAX_LENGTH>;
 
 pub enum WifiCommand {
     SetStation(WifiConfig<Station>),
-    SetAp(WifiConfig<AccessPoint>),
+    SetAccessPoint(WifiConfig<AccessPoint>),
     Scan,
 }
 
-pub enum WifiCommandReply {
+pub enum WifiScanResponse {
     Scan(WifiScanResult),
-    Error(esp_radio::wifi::WifiError),
+}
+
+pub enum WifiSetConfigResponse {
+    Ok,
+}
+
+#[derive(Debug)]
+pub enum WifiCommandError {
+    WifiError(esp_radio::wifi::WifiError),
 }
 
 type WifiCommandChannel = Channel<CriticalSectionRawMutex, WifiCommand, 4>;
-type WifiCommandReplyChannel = Channel<CriticalSectionRawMutex, WifiCommandReply, 4>;
+type WifiScanReplyChannel =
+    Channel<CriticalSectionRawMutex, Result<WifiScanResponse, WifiCommandError>, 4>;
+type WifiSetConfigReplyChannel =
+    Channel<CriticalSectionRawMutex, Result<WifiSetConfigResponse, WifiCommandError>, 4>;
 
 pub static WIFI_COMMAND_CHANNEL: WifiCommandChannel = Channel::new();
-pub static WIFI_COMMAND_REPLY_CHANNEL: WifiCommandReplyChannel = Channel::new();
+pub static WIFI_SCAN_REPLY_CHANNEL: WifiScanReplyChannel = Channel::new();
+pub static WIFI_SET_CONFIG_REPLY_CHANNEL: WifiSetConfigReplyChannel = Channel::new();
 
 // ---
 // TODO: store esp_radio Configs instead WifiConfig
@@ -85,59 +97,78 @@ impl WifiRunner {
         ssid: &str,
         password: &str,
         need_password: bool,
-    ) -> Option<(Ssid, Option<Password>)> {
-        let ssid = Ssid::try_from(ssid)
-            .inspect_err(|error| {
-                log::warn!(
-                    "[WIFI] Get {} ssid failed, keep the old config: {:?}",
-                    role,
-                    error
-                )
-            })
-            .ok()?;
+    ) -> Result<(Ssid, Option<Password>), esp_radio::wifi::WifiError> {
+        let ssid = Ssid::try_from(ssid).inspect_err(|error| {
+            log::warn!(
+                "[WIFI] Get {} ssid failed, keep the old config: {:?}",
+                role,
+                error
+            )
+        })?;
 
         if !need_password {
-            return Some((ssid, None));
+            return Ok((ssid, None));
         }
 
-        let password = Password::try_from(password)
-            .inspect_err(|error| {
-                log::warn!(
-                    "[WIFI] Get {} password failed, keep the old config: {:?}",
-                    role,
-                    error
-                )
-            })
-            .ok()?;
+        let password = Password::try_from(password).inspect_err(|error| {
+            log::warn!(
+                "[WIFI] Get {} password failed, keep the old config: {:?}",
+                role,
+                error
+            )
+        })?;
 
-        Some((ssid, Some(password)))
+        Ok((ssid, Some(password)))
     }
 
-    fn set_station_config(&mut self, ssid: &str, password: &str) {
-        let Some((ssid, Some(password))) = Self::parse_credentials("station", ssid, password, true)
-        else {
-            return;
-        };
+    fn set_station_config(
+        &mut self,
+        ssid: &str,
+        password: &str,
+    ) -> Result<(), esp_radio::wifi::WifiError> {
+        let need_password = true;
+        let result = Self::parse_credentials("Station", ssid, password, need_password)?;
+        let (ssid, _) = result;
+        let mut authentication = AuthenticationMethodConfig::Open;
 
-        let authentication = AuthenticationMethodConfig::Wpa2Personal(password);
+        if need_password {
+            let (_, Some(password)) = result else {
+                return Err(esp_radio::wifi::WifiError::Other);
+            };
+
+            authentication = AuthenticationMethodConfig::Wpa2Personal(password);
+        }
 
         self.station_config = StationConfig::default()
             .with_ssid(ssid)
             .with_authentication(authentication);
+
+        Ok(())
     }
 
-    fn set_ap_config(&mut self, ssid: &str, password: &str) {
-        let Some((ssid, Some(password))) =
-            Self::parse_credentials("Access Point", ssid, password, true)
-        else {
-            return;
-        };
+    fn set_ap_config(
+        &mut self,
+        ssid: &str,
+        password: &str,
+    ) -> Result<(), esp_radio::wifi::WifiError> {
+        let need_password = true;
+        let result = Self::parse_credentials("Access Point", ssid, password, need_password)?;
+        let (ssid, _) = result;
+        let mut authentication = AuthenticationMethodConfig::Open;
 
-        let authentication = AuthenticationMethodConfig::Wpa2Personal(password);
+        if need_password {
+            let (_, Some(password)) = result else {
+                return Err(esp_radio::wifi::WifiError::Other);
+            };
+
+            authentication = AuthenticationMethodConfig::Wpa2Personal(password);
+        }
 
         self.ap_config = AccessPointConfig::default()
             .with_ssid(ssid)
             .with_authentication(authentication);
+
+        Ok(())
     }
 
     fn apply(&mut self) {
@@ -149,16 +180,8 @@ impl WifiRunner {
         };
     }
 
-    async fn reconnect_and_apply(&mut self) {
-        if self.wifi_controller.is_connected() {
-            let _ = self.wifi_controller.disconnect_async().await;
-        }
-
-        self.apply();
-    }
-
     async fn run(mut self) {
-        self.reconnect_and_apply().await;
+        self.apply();
 
         if let Err(error) = self
             .wifi_controller
@@ -211,12 +234,36 @@ impl WifiRunner {
             if let Some(command) = command {
                 match command {
                     WifiCommand::SetStation(station_config) => {
-                        self.set_station_config(&station_config.ssid, &station_config.password);
-                        self.reconnect_and_apply().await
+                        match self
+                            .set_station_config(&station_config.ssid, &station_config.password)
+                        {
+                            Ok(_) => {
+                                WIFI_SET_CONFIG_REPLY_CHANNEL
+                                    .send(Ok(WifiSetConfigResponse::Ok))
+                                    .await
+                            }
+                            Err(error) => {
+                                WIFI_SET_CONFIG_REPLY_CHANNEL
+                                    .send(Err(WifiCommandError::WifiError(error)))
+                                    .await
+                            }
+                        };
+                        self.apply()
                     }
-                    WifiCommand::SetAp(ap_config) => {
-                        self.set_ap_config(&ap_config.ssid, &ap_config.password);
-                        self.reconnect_and_apply().await
+                    WifiCommand::SetAccessPoint(ap_config) => {
+                        match self.set_ap_config(&ap_config.ssid, &ap_config.password) {
+                            Ok(_) => {
+                                WIFI_SET_CONFIG_REPLY_CHANNEL
+                                    .send(Ok(WifiSetConfigResponse::Ok))
+                                    .await
+                            }
+                            Err(error) => {
+                                WIFI_SET_CONFIG_REPLY_CHANNEL
+                                    .send(Err(WifiCommandError::WifiError(error)))
+                                    .await
+                            }
+                        };
+                        self.apply()
                     }
                     WifiCommand::Scan => {
                         match self
@@ -231,13 +278,13 @@ impl WifiRunner {
                                     let _ = result.push(ap);
                                 }
 
-                                WIFI_COMMAND_REPLY_CHANNEL
-                                    .send(WifiCommandReply::Scan(result))
+                                WIFI_SCAN_REPLY_CHANNEL
+                                    .send(Ok(WifiScanResponse::Scan(result)))
                                     .await;
                             }
                             Err(error) => {
-                                WIFI_COMMAND_REPLY_CHANNEL
-                                    .send(WifiCommandReply::Error(error))
+                                WIFI_SCAN_REPLY_CHANNEL
+                                    .send(Err(WifiCommandError::WifiError(error)))
                                     .await;
                             }
                         };
