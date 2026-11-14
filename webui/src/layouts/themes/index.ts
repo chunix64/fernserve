@@ -27,3 +27,15 @@ export function setTheme(id: ThemeId) {
 export function loadTheme() {
   setTheme(getTheme());
 }
+
+export function themeEvents() {
+  window.addEventListener("load", loadTheme);
+  window.addEventListener("storage", loadTheme);
+
+  if (document.readyState === "complete") loadTheme();
+
+  return () => {
+    window.removeEventListener("load", loadTheme);
+    window.removeEventListener("storage", loadTheme);
+  };
+}

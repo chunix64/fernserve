@@ -1,4 +1,3 @@
-import { useState } from "preact/hooks";
 import type { UploadFile } from "@/hooks/useUploadQueue";
 import { getSizeString } from "@/helpers/size.ts";
 
@@ -68,8 +67,6 @@ function UploadItem(
 export default function UploadArea(
   { queue, onCancel, onCancelAll, onClose }: Props,
 ) {
-  const [collapsed, setCollapsed] = useState(false);
-
   const total = queue.length;
   const completed = queue.filter((i) => i.state === "Completed").length;
   const cancelled = queue.filter((i) => i.state === "Cancelled").length;
@@ -81,10 +78,10 @@ export default function UploadArea(
   const title = active > 0
     ? `Uploading ${active} file${active === 1 ? "" : "s"}…`
     : failed > 0
-      ? "Finished with errors"
-      : completed === 0 && cancelled > 0
-        ? "Cancelled"
-        : "Complete!";
+    ? "Finished with errors"
+    : completed === 0 && cancelled > 0
+    ? "Cancelled"
+    : "Complete!";
 
   const actionText = `Complete ${completed}/${total}` +
     (failed > 0 ? ` · ${failed} failed` : "");
@@ -99,8 +96,7 @@ export default function UploadArea(
           <h4 style="margin:0px" id="upload_title">{title}</h4>
           <svg
             id="upload-toggle"
-            class={`size-6 ${collapsed ? "collapsed" : ""}`}
-            onClick={() => setCollapsed((c) => !c)}
+            class="size-6"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
@@ -115,7 +111,7 @@ export default function UploadArea(
           </svg>
         </div>
 
-        {!collapsed && (
+        {
           <>
             <div class="upload_action">
               <p id="upload_action_text">{actionText}</p>
@@ -135,7 +131,7 @@ export default function UploadArea(
               </ul>
             </div>
           </>
-        )}
+        }
       </div>
     </div>
   );

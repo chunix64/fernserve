@@ -6,22 +6,31 @@ import {
   Router,
 } from "preact-iso";
 import { useEffect } from "preact/hooks";
-import { loadTheme } from "./layouts/themes";
+import { themeEvents } from "./layouts/themes";
 import type { ComponentChildren, ComponentType } from "preact";
 
+const DefaultLayout = lazy(() => import("@/layouts/DefaultLayout"));
+const AdminLayout = lazy(() => import("@/layouts/AdminLayout"));
+
 const FileBrowser = lazy(() => import("@/pages/FileBrowser"));
-const DefaultLayout = lazy(() => import("@/layouts/default"));
+const AdminHome = lazy(() => import("@/pages/AdminHome"));
 
-function themeEvents() {
-  window.addEventListener("load", loadTheme);
-  window.addEventListener("storage", loadTheme);
+export function App() {
+  useEffect(themeEvents, []);
 
-  if (document.readyState === "complete") loadTheme();
+  const MainPage = withLayout(DefaultLayout, FileBrowser);
+  const AdminPage = withLayout(AdminLayout, AdminHome);
 
-  return () => {
-    window.removeEventListener("load", loadTheme);
-    window.removeEventListener("storage", loadTheme);
-  };
+  return (
+    <LocationProvider>
+      <ErrorBoundary>
+        <Router>
+          <Route path="/dev/admin" component={AdminPage} />
+          <Route default component={MainPage} />
+        </Router>
+      </ErrorBoundary>
+    </LocationProvider>
+  );
 }
 
 function withLayout(
@@ -35,20 +44,4 @@ function withLayout(
       </Layout>
     );
   };
-}
-
-export function App() {
-  useEffect(themeEvents, []);
-
-  const MainPage = withLayout(DefaultLayout, FileBrowser);
-
-  return (
-    <LocationProvider>
-      <ErrorBoundary>
-        <Router>
-          {[<Route default component={MainPage} />]}
-        </Router>
-      </ErrorBoundary>
-    </LocationProvider>
-  );
 }
