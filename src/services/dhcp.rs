@@ -1,5 +1,6 @@
 use core::net::Ipv4Addr;
 
+use defmt::error;
 use leasehund::{DhcpConfigBuilder, DhcpServer};
 
 use crate::configs::{DHCP_MAX_CLIENT, DHCP_MAX_DNS_SERVER, DHCP_MAX_POOLS, DHCP_MAX_STATIC};
@@ -26,7 +27,7 @@ pub async fn dhcp_server_service(ap_network_stack: embassy_net::Stack<'static>) 
         DHCP_MAX_POOLS,
     > = DhcpServer::with_config(config);
 
-    log::error!(
+    error!(
         "[DHCP] Infallible server crashed: {:?}",
         server.run(ap_network_stack).await
     );

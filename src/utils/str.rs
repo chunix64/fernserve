@@ -1,5 +1,6 @@
 use core::fmt::Write;
 
+use defmt::{Debug2Format, error};
 use heapless::string::String;
 
 use crate::configs::ERROR_STRING_MAX_LENGTH;
@@ -21,10 +22,10 @@ pub fn error_to_string(error: anyhow::Error) -> String<ERROR_STRING_MAX_LENGTH> 
         .or_else(|_| try_write(&mut buffer, format_args!("{:?}", error)));
 
     if let Err(parsing_error) = result {
-        log::error!(
+        error!(
             "[UTILS] error_to_string failed: {:#?} for {:#?}",
             parsing_error,
-            error
+            Debug2Format(&error)
         );
     }
 
@@ -35,10 +36,9 @@ pub fn usize_to_string(number: usize) -> String<20> {
     let mut buffer = String::<20>::new();
 
     if let Err(parsing_error) = write!(buffer, "{}", number) {
-        log::error!(
+        error!(
             "[UTILS] usize_to_string failed: {:#?} for {}",
-            parsing_error,
-            number
+            parsing_error, number
         );
     }
 

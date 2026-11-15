@@ -4,6 +4,7 @@ runner = "espflash flash --monitor --chip esp32 --baud 921600 --partition-table 
 [build]
 rustflags = [
   "-C", "link-arg=-nostartfiles",
+  "-C", "link-arg=-Tdefmt.x",
 ]
 
 target = "xtensa-esp32-none-elf"
@@ -12,7 +13,8 @@ target = "xtensa-esp32-none-elf"
 build-std = ["core", "alloc"]
 
 [env]
-ESP_LOG = "DEBUG"
+DEFMT_LOG = "debug"
+# DEFMT_LOG = "trace,esp_radio=debug,esp_phy=debug"
 CROSS_COMPILE="xtensa-esp32-elf"
 CC = "xtensa-esp32-elf-cc"
 AR = "xtensa-esp32-elf-ar"

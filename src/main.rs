@@ -3,12 +3,6 @@
 #![deny(clippy::mem_forget)]
 #![deny(clippy::large_stack_frames)]
 
-#[panic_handler]
-fn panic(panic_info: &core::panic::PanicInfo) -> ! {
-    log::info!("[PANIC] {}", panic_info);
-    loop {}
-}
-
 esp_bootloader_esp_idf::esp_app_desc!();
 
 extern crate alloc;
@@ -24,6 +18,9 @@ mod utils;
 mod vfs;
 
 // ---
+use esp_backtrace as _;
+use esp_println as _;
+
 use embassy_executor::Spawner;
 use embassy_time::Delay;
 use embedded_hal_async::delay::DelayNs;
@@ -76,7 +73,7 @@ async fn main(spawner: Spawner) -> ! {
         .await
         .expect("Failed to get mountable state of root_filesystem")
     {
-        log::debug!("[DEBUG] File is not mountable, try format");
+        defmt::debug!("[DEBUG] File is not mountable, try format");
         root_filesystem.format().await.expect("format filesystem");
     }
 

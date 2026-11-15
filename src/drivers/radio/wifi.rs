@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::warn;
+use defmt::warn;
 
 use crate::configs::WIFI_SCAN_MAX_LENGTH;
 use crate::hardwares::radio::wifi::{

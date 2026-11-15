@@ -1,5 +1,6 @@
 use core::net::Ipv4Addr;
 
+use defmt::{info, warn};
 use embassy_net::{Ipv4Cidr, StackResources};
 use esp_hal::rng::Rng;
 use static_cell::StaticCell;
@@ -70,9 +71,9 @@ pub async fn net_monitor_service(network_stack: embassy_net::Stack<'static>, rol
     loop {
         network_stack.wait_config_up().await;
         if let Some(config) = network_stack.config_v4() {
-            log::info!("[NET] {} IP: {}", role, config.address);
+            info!("[NET] {} IP: {}", role, config.address);
         }
         network_stack.wait_config_down().await;
-        log::warn!("[NET] {} Link/config lost", role);
+        warn!("[NET] {} Link/config lost", role);
     }
 }

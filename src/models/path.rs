@@ -1,5 +1,6 @@
 use core::fmt;
 
+use defmt::error;
 use heapless::vec::Vec;
 use serde::{Serialize, Serializer};
 
@@ -17,7 +18,7 @@ impl Path {
     pub fn new(path: &str) -> Result<Self, PathError> {
         let bytes = path.as_bytes();
         if bytes.len() > PATH_MAX_LENGTH {
-            log::error!(
+            error!(
                 "[PATH] Path too long: {} > {}",
                 bytes.len(),
                 PATH_MAX_LENGTH
@@ -82,7 +83,7 @@ impl Path {
                 stack.pop();
             } else {
                 if let Err(error) = stack.push(c) {
-                    log::error!("[PATH] stack.push failed: {:#?}", error);
+                    error!("[PATH] stack.push failed: {:#?}", error);
                 };
             }
         }

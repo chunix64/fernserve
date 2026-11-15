@@ -1,3 +1,4 @@
+use defmt::{Debug2Format, warn};
 use embedded_io_async::Read;
 use picoserve::response::chunked::{ChunkWriter, Chunks, ChunksWritten};
 
@@ -34,7 +35,10 @@ impl<R: Read> Chunks for ChunkReader<R> {
                     chunk_writer.write_chunk(&buffer[..read_bytes]).await?;
                 }
                 Err(error) => {
-                    log::warn!("[CHUNK READER] failed to read chunks, {:?}", error);
+                    warn!(
+                        "[CHUNK READER] failed to read chunks, {:?}",
+                        Debug2Format(&error)
+                    );
                     break;
                 }
             }

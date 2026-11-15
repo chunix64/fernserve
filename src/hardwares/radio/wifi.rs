@@ -1,3 +1,4 @@
+use defmt::{info, warn};
 use embassy_futures::select::{Either, select};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embassy_time::Delay;
@@ -8,7 +9,6 @@ use esp_radio::wifi::{
     scan::ScanConfig,
     sta::StationConfig,
 };
-use log::{info, warn};
 
 use crate::{
     configs::{WIFI_RETRY_INTERVAL, WIFI_SCAN_MAX_LENGTH},
@@ -56,7 +56,7 @@ pub enum WifiSetConfigResponse {
     Ok,
 }
 
-#[derive(Debug)]
+#[derive(Debug, defmt::Format)]
 pub enum WifiCommandError {
     WifiError(esp_radio::wifi::WifiError),
 }
@@ -99,10 +99,9 @@ impl WifiRunner {
         need_password: bool,
     ) -> Result<(Ssid, Option<Password>), esp_radio::wifi::WifiError> {
         let ssid = Ssid::try_from(ssid).inspect_err(|error| {
-            log::warn!(
+            warn!(
                 "[WIFI] Get {} ssid failed, keep the old config: {:?}",
-                role,
-                error
+                role, error
             )
         })?;
 
@@ -111,10 +110,9 @@ impl WifiRunner {
         }
 
         let password = Password::try_from(password).inspect_err(|error| {
-            log::warn!(
+            warn!(
                 "[WIFI] Get {} password failed, keep the old config: {:?}",
-                role,
-                error
+                role, error
             )
         })?;
 
