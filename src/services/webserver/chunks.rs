@@ -36,7 +36,7 @@ impl<R: Read> Chunks for ChunkReader<R> {
                 }
                 Err(error) => {
                     warn!(
-                        "[CHUNK READER] failed to read chunks, {:?}",
+                        "[CHUNK READER] failed to read chunks, {:#?}",
                         Debug2Format(&error)
                     );
                     break;

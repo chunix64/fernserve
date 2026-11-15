@@ -1,3 +1,4 @@
+use defmt::{Debug2Format, trace};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use picoserve::ResponseSent;
@@ -61,6 +62,11 @@ impl PathRouterService for WebServerHandler {
         request: picoserve::request::Request<'_, R>,
         response_writer: W,
     ) -> Result<ResponseSent, W::Error> {
+        trace!(
+            "[WEBSERVER] Received request: {:#?}",
+            Debug2Format(&request.parts)
+        );
+
         match request.parts.method() {
             "GET" => self.get_handler(request, response_writer).await,
             "POST" => self.post_handler(request, response_writer).await,

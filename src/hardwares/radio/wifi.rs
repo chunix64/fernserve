@@ -100,7 +100,7 @@ impl WifiRunner {
     ) -> Result<(Ssid, Option<Password>), esp_radio::wifi::WifiError> {
         let ssid = Ssid::try_from(ssid).inspect_err(|error| {
             warn!(
-                "[WIFI] Get {} ssid failed, keep the old config: {:?}",
+                "[WIFI] Get {} ssid failed, keep the old config: {:#?}",
                 role, error
             )
         })?;
@@ -111,7 +111,7 @@ impl WifiRunner {
 
         let password = Password::try_from(password).inspect_err(|error| {
             warn!(
-                "[WIFI] Get {} password failed, keep the old config: {:?}",
+                "[WIFI] Get {} password failed, keep the old config: {:#?}",
                 role, error
             )
         })?;
@@ -185,7 +185,7 @@ impl WifiRunner {
             .wifi_controller
             .set_power_saving(esp_radio::wifi::PowerSaveMode::Minimum)
         {
-            warn!("[WIFI] Can not set power saving mode: {:?}", error);
+            warn!("[WIFI] Can not set power saving mode: {:#?}", error);
         }
 
         loop {
@@ -218,7 +218,7 @@ impl WifiRunner {
                     }
                     Either::First(Err(error)) => {
                         warn!(
-                            "[WIFI] WiFi cannot connect to {}, retry! Error: {:?}",
+                            "[WIFI] WiFi cannot connect to {}, retry! Error: {:#?}",
                             self.station_config.ssid().as_str(),
                             error
                         );

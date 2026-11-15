@@ -28,7 +28,7 @@ pub async fn dhcp_server_service(ap_network_stack: embassy_net::Stack<'static>) 
     > = DhcpServer::with_config(config);
 
     error!(
-        "[DHCP] Infallible server crashed: {:?}",
+        "[DHCP] Infallible server crashed: {:#?}",
         server.run(ap_network_stack).await
     );
 }

@@ -26,7 +26,7 @@ impl WifiDriver {
                     .collect();
             }
             Err(WifiCommandError::WifiError(error)) => {
-                warn!("[WIFI] Scan wifi failed: {:?}", error)
+                warn!("[WIFI] Scan wifi failed: {:#?}", error)
             }
         }
 
@@ -41,7 +41,7 @@ impl WifiDriver {
         match WIFI_SET_CONFIG_REPLY_CHANNEL.receive().await {
             Ok(WifiSetConfigResponse::Ok) => {}
             Err(error) => {
-                warn!("[WIFI] Set Station failed: {:?}", error)
+                warn!("[WIFI] Set Station failed: {:#?}", error)
             }
         }
 
@@ -56,7 +56,7 @@ impl WifiDriver {
         match WIFI_SET_CONFIG_REPLY_CHANNEL.receive().await {
             Ok(WifiSetConfigResponse::Ok) => {}
             Err(error) => {
-                warn!("[WIFI] Set Access Point failed: {:?}", error)
+                warn!("[WIFI] Set Access Point failed: {:#?}", error)
             }
         }
 

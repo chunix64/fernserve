@@ -1,5 +1,15 @@
 [target.xtensa-esp32-none-elf]
-runner = "espflash flash --monitor --chip esp32 --baud 921600 --partition-table partitions.csv"
+runner = [
+  "espflash",
+  "flash",
+  "--monitor",
+  "--chip", "esp32",
+  "--baud", "921600",
+  "--partition-table", "partitions.csv",
+  "--output-format", "{L:severity:bold} - {s:severity}",
+  "--log-format", "defmt"
+]
+
 
 [build]
 rustflags = [
