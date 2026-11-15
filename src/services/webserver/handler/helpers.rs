@@ -1,12 +1,13 @@
 use alloc::string::String;
-use alloc::string::ToString;
 
 use anyhow::{Result, anyhow};
 use picoserve::ResponseSent;
 use picoserve::response::{Response, StatusCode};
 
 use super::WebServerHandler;
+use crate::configs::WEB_SERVER_QUERY_MAX_LENGTH;
 use crate::services::webserver::parser::WebServerParser;
+use crate::utils::str::error_to_string;
 
 impl WebServerHandler {
     pub(super) async fn helper_parse_key<R: embedded_io_async::Read>(
@@ -36,7 +37,7 @@ impl WebServerHandler {
             .parts
             .query()
             .ok_or(anyhow!("Request parse query failed"))?
-            .try_into_string::<2048>()?;
+            .try_into_string::<WEB_SERVER_QUERY_MAX_LENGTH>()?;
 
         WebServerParser::parse_param_key(&query, key)?.ok_or(anyhow!("Parse param key failed"))
     }
@@ -76,7 +77,7 @@ impl WebServerHandler {
         response_writer: W,
         error: anyhow::Error,
     ) -> Result<ResponseSent, W::Error> {
-        Self::helper_error_response(request, response_writer, &error.to_string(), 503).await
+        Self::helper_error_response(request, response_writer, &error_to_string(error), 503).await
     }
 
     pub(super) async fn helper_error_response<

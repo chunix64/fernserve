@@ -1,4 +1,4 @@
-use alloc::string::{String, ToString};
+use alloc::string::String;
 
 use anyhow::{Result, anyhow, bail};
 use embedded_io_async::{Read, Seek, SeekFrom, Write};
@@ -8,15 +8,16 @@ use super::WebServerParser;
 use crate::{
     configs::{HTTP_BUFFER_SIZE, UPLOAD_CHUNK_SIZE},
     models::{filesystem::File, path::Path},
+    utils::str::{bool_to_str, usize_to_string},
     vfs::VirtualFileSystem,
 };
 
 impl WebServerParser {
     pub async fn vfs_exists(vfs: &mut VirtualFileSystem, path: &str) -> Result<String> {
         let path = Path::new(path)?;
-        let exist = vfs.exists(path).await?.to_string();
+        let exist = vfs.exists(path).await?;
 
-        Ok(Self::parse_json(200, "exist", &exist))
+        Ok(Self::parse_json(200, "exist", bool_to_str(exist)))
     }
 
     pub async fn vfs_available_space(vfs: &mut VirtualFileSystem, path: &str) -> Result<String> {
@@ -26,7 +27,7 @@ impl WebServerParser {
         Ok(Self::parse_json(
             200,
             "available_space",
-            &available_space.to_string(),
+            &usize_to_string(available_space),
         ))
     }
 
@@ -37,7 +38,7 @@ impl WebServerParser {
         Ok(Self::parse_json(
             200,
             "total_space",
-            &total_space.to_string(),
+            &usize_to_string(total_space),
         ))
     }
 
@@ -172,7 +173,7 @@ impl WebServerParser {
         Ok(Self::parse_json(
             200,
             "chunk_index",
-            &chunk_index.to_string(),
+            &usize_to_string(chunk_index),
         ))
     }
 }

@@ -31,3 +31,7 @@ pub const PATH_MAX_LENGTH: usize = 256;
 // Intervals
 pub const WIFI_RETRY_INTERVAL: usize = 2000;
 pub const DEBUG_SERVICE_INTERVAL: usize = 5000;
+
+// Heapless
+pub const WEB_SERVER_QUERY_MAX_LENGTH: usize = 256;
+pub const ERROR_STRING_MAX_LENGTH: usize = 128;

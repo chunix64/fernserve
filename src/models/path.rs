@@ -1,7 +1,6 @@
-use alloc::vec;
-use alloc::vec::Vec;
 use core::fmt;
 
+use heapless::vec::Vec;
 use serde::{Serialize, Serializer};
 
 use crate::configs::PATH_MAX_LENGTH;
@@ -34,7 +33,7 @@ impl Path {
         })
     }
 
-    pub fn from_components(components: Vec<&str>) -> Result<Self, PathError> {
+    pub fn from_components(components: Vec<&str, PATH_MAX_LENGTH>) -> Result<Self, PathError> {
         let mut result = components.join("/");
 
         if !components.is_empty() && components[0] != "/" {
@@ -62,7 +61,7 @@ impl Path {
     //         .filter(|c| !c.is_empty() && *c != ".")
     // }
 
-    pub fn components(&self) -> Vec<&str> {
+    pub fn components(&self) -> Vec<&str, PATH_MAX_LENGTH> {
         let mut stack = Vec::new();
 
         if self.as_str() == ""
@@ -71,7 +70,7 @@ impl Path {
             || self.as_str() == "./"
             || self.as_str() == "./."
         {
-            return vec!["/"];
+            return Vec::from_array(["/"]);
         }
 
         for c in self
@@ -82,7 +81,9 @@ impl Path {
             if c == ".." {
                 stack.pop();
             } else {
-                stack.push(c);
+                if let Err(error) = stack.push(c) {
+                    log::error!("[PATH] stack.push failed: {:#?}", error);
+                };
             }
         }
 
