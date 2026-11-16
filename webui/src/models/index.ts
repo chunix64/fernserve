@@ -4,3 +4,10 @@ export type FileSystemNode = {
   size: number;
   lastModified: Date;
 };
+
+export type WifiEntry = {
+  ssid: string;
+  auth_method: string;
+  rssi: number;
+  channel: number;
+};

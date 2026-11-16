@@ -1,5 +1,5 @@
 import { UPLOAD_CHUNK_SIZE, UPLOAD_TRY_ATTEMPT } from "@/configs";
-import type { FileSystemNode } from "@/models";
+import type { FileSystemNode, WifiEntry } from "@/models";
 
 const API_HOST = location.hostname || "192.168.4.1";
 // const API_HOST = "localhost:8081";
@@ -75,6 +75,20 @@ export default class FernClient {
     document.body.appendChild(a);
     a.click();
     a.remove();
+  }
+
+  static async scanWifi() {
+    const uri = `${API_URI}/wifi/scan`;
+    const response = await fetchJson(uri);
+
+    return response.map((wifiEntry: any): WifiEntry => {
+      return {
+        ssid: wifiEntry.ssid,
+        auth_method: wifiEntry.auth_method,
+        rssi: wifiEntry.rssi,
+        channel: wifiEntry.channel,
+      };
+    });
   }
 }
 
