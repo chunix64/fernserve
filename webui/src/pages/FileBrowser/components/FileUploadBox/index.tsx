@@ -1,10 +1,11 @@
 import type { TargetedSubmitEvent } from "preact";
 
 type FileUploadBoxProps = {
-  enqueue: (files: File[]) => void;
+  enqueue: (files: File[], path: string) => void;
+  path: string;
 };
 
-export default function FileUploadBox({ enqueue }: FileUploadBoxProps) {
+export default function FileUploadBox({ enqueue, path }: FileUploadBoxProps) {
   function onSubmit(e: TargetedSubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
@@ -12,7 +13,7 @@ export default function FileUploadBox({ enqueue }: FileUploadBoxProps) {
       .getAll("file_to_upload")
       .filter((item): item is File => item instanceof File);
     form.reset();
-    enqueue(files);
+    enqueue(files, path);
   }
 
   return (

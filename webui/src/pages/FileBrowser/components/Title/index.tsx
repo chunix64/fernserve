@@ -1,5 +1,8 @@
+import { useLocation } from "preact-iso";
+
 function getPath() {
-  const paths = location.pathname.split("/").filter(Boolean);
+  const { path } = useLocation();
+  const paths = path.split("/").filter(Boolean);
 
   if (paths.length === 0) {
     return;

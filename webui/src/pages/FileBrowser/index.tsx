@@ -9,9 +9,11 @@ import FileList from "@/pages/FileBrowser/components/FileList";
 import { type FileSystemNode } from "@/models";
 import UploadArea from "./components/UploadArea";
 import { useUploadQueue } from "@/hooks/useUploadQueue";
+import { useLocation } from "preact-iso";
 
 export default function FileBrowser() {
-  const dir = location.pathname || "/";
+  const { path } = useLocation();
+
   const [fileSystemNodes, setFileSystemNodes] = useState<FileSystemNode[]>([]);
   const { queue, enqueue, cancel, cancelAll, clear } = useUploadQueue(
     setFileSystemNodes,
@@ -19,12 +21,12 @@ export default function FileBrowser() {
 
   // FileBrowser
   useEffect(() => {
-    FernClient.readDir(dir)
+    FernClient.readDir(path)
       .then((nodes) => {
         setFileSystemNodes(nodes);
       })
       .catch(console.error);
-  }, [dir]);
+  }, [path]);
 
   return (
     <>
@@ -36,6 +38,7 @@ export default function FileBrowser() {
       <div class="toolbar">
         <div class="tool_row upload_tools">
           <FileUploadBox
+            path={path}
             enqueue={enqueue}
           />
           <CreateDirectoryBox setFileSystemNodes={setFileSystemNodes} />

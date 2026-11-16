@@ -3,6 +3,7 @@ import FernClient from "@/api/client.ts";
 import type { Dispatch, StateUpdater } from "preact/hooks";
 import { isValidName, joinPath } from "@/helpers/path";
 import type { TargetedSubmitEvent } from "preact";
+import { useLocation } from "preact-iso";
 
 type CreateDirectoryBoxProps = {
   setFileSystemNodes: Dispatch<StateUpdater<FileSystemNode[]>>;
@@ -47,11 +48,12 @@ async function createDirectory(
   setFileSystemNodes: Dispatch<StateUpdater<FileSystemNode[]>>,
 ) {
   e.preventDefault();
+  const { path } = useLocation();
   const form = e.currentTarget;
   const name = (new FormData(form).get("mkdir") as string)?.trim();
   if (!name || !isValidName(name)) return;
   await createDirectoryInner(
-    joinPath(location.pathname, name),
+    joinPath(path, name),
     setFileSystemNodes,
   );
   form.reset();

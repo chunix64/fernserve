@@ -81,12 +81,11 @@ export function useUploadQueue(
     }
   }
 
-  function enqueue(files: File[]) {
-    const dir = location.pathname;
+  function enqueue(files: File[], path: string) {
     const items = files.map((file): UploadFile => ({
       id: nextId++,
       file,
-      path: joinPath(dir, file.name),
+      path: joinPath(path, file.name),
       state: file.name && isValidName(file.name) ? "Pending" : "Failed",
       uploadedBytes: 0,
       totalBytes: file.size,
